@@ -1,6 +1,11 @@
 package io.github.wrinfotel.flakydiff.reader
 
 import javax.xml.parsers.DocumentBuilderFactory
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeParseException
 import kotlin.math.roundToLong
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -28,6 +33,21 @@ private fun failurePayload(el: Element): TestFailure = TestFailure(
     content = el.textContent.ifEmpty { null },
 )
 
+/** ISO-8601: Instant (…Z), OffsetDateTime, либо LocalDateTime в системной зоне. */
+internal fun parseTimestampValue(value: String): Long? = try {
+    Instant.parse(value).toEpochMilli()
+} catch (_: DateTimeParseException) {
+    try {
+        OffsetDateTime.parse(value).toInstant().toEpochMilli()
+    } catch (_: DateTimeParseException) {
+        try {
+            LocalDateTime.parse(value).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } catch (_: DateTimeParseException) {
+            null
+        }
+    }
+}
+
 fun parse(xml: String): ParseOutcome {
     val doc = try {
         newDocumentBuilder().parse(xml.byteInputStream())
@@ -40,9 +60,12 @@ fun parse(xml: String): ParseOutcome {
     val testcases = doc.getElementsByTagName("testcase")
     val result = mutableListOf<TestExecution>()
     val markedFlaky = mutableSetOf<TestRef>()
+    val timestamps = mutableMapOf<TestRef, Long>()
     for (i in 0 until testcases.length) {
         val tc = testcases.item(i) as Element
         val ref = TestRef(tc.getAttribute("classname"), tc.getAttribute("name"))
+        val ts = tc.getAttribute("timestamp").takeIf { it.isNotEmpty() }?.let { parseTimestampValue(it) }
+        if (ts != null) timestamps[ref] = ts
         var status = Status.PASSED
         var failure: TestFailure? = null
         var child: Node? = tc.firstChild
@@ -70,5 +93,10 @@ fun parse(xml: String): ParseOutcome {
         }
         result += TestExecution(ref, status, durationMs(tc), failure)
     }
-    return ParseOutcome.Ok(ParsedFile(result, markedFlaky))
+    val suiteTimestamp = doc.getElementsByTagName("testsuite").item(0)
+        ?.let { it as? Element }
+        ?.getAttribute("timestamp")
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { parseTimestampValue(it) }
+    return ParseOutcome.Ok(ParsedFile(result, markedFlaky, timestamps, suiteTimestamp))
 }

@@ -17,8 +17,15 @@ data class TestRun(val entries: List<TestExecution>, val markedFlaky: Set<TestRe
 
 data class ReaderError(val message: String, val cause: String? = null)
 
-/** Результат разбора одного XML-файла: по записи на testcase, rerun-элементы отдельно. */
-data class ParsedFile(val entries: List<TestExecution>, val markedFlaky: Set<TestRef>)
+/** Результат разбора одного XML-файла: по записи на testcase, rerun-элементы отдельно.
+ *  timestamps — точные старты testcase (surefire ≥3.5.5 reportTestTimestamp);
+ *  suiteTimestampMs — атрибут timestamp на уровне testsuite (фолбэк для класса). */
+data class ParsedFile(
+    val entries: List<TestExecution>,
+    val markedFlaky: Set<TestRef>,
+    val timestamps: Map<TestRef, Long> = emptyMap(),
+    val suiteTimestampMs: Long? = null,
+)
 
 /**
  * Склеивает разобранные файлы в прогон: (class, method) встречается один раз —
