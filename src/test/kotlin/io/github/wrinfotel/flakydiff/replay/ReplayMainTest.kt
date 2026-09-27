@@ -205,6 +205,30 @@ class ReplayMainTest {
     }
 
     @Test
+    fun `victim-timeout watchdog aborts hanging repeat with infra marker`() {
+        val report = tmp.resolve("report.json")
+        val startedAt = System.nanoTime()
+        val (proc, output) = runReplay(
+            report,
+            "--victim", "io.github.wrinfotel.flakydiff.replay.FakeHangingVictim#hangs",
+            "--victim-timeout", "1",
+        )
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+        assertEquals(0, proc.exitValue(), "output:\n$output")
+        assertTrue(elapsedMs < 15_000, "watchdog обязан оборвать зависший повтор быстро, elapsed=${elapsedMs}ms")
+
+        val entries = readEntries(report)
+        // первый же зависший повтор обрывает остальные (timeout -> infra, повторять бессмысленно)
+        assertEquals(1, entries.size, "report:\n${report.readText()}")
+        assertEquals(
+            "flakydiff.victim-timeout",
+            entries[0]["failureType"]?.jsonPrimitive?.content,
+            "report:\n${report.readText()}",
+        )
+        assertEquals("FAILED", entries[0]["status"]?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun `repeat below 3 is rejected`() {
         val report = tmp.resolve("report.json")
         val (proc, _) = runReplay(

@@ -4,12 +4,18 @@ import org.junit.platform.engine.TestExecutionResult
 import org.junit.platform.engine.discovery.DiscoverySelectors
 import org.junit.platform.engine.support.descriptor.ClassSource
 import org.junit.platform.engine.support.descriptor.MethodSource
+import org.junit.platform.launcher.Launcher
+import org.junit.platform.launcher.LauncherDiscoveryRequest
 import org.junit.platform.launcher.TestExecutionListener
 import org.junit.platform.launcher.TestIdentifier
 import org.junit.platform.launcher.TestPlan
+import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder
 import org.junit.platform.launcher.core.LauncherFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.system.exitProcess
 
 /**
@@ -44,24 +50,30 @@ object ReplayMain {
                     if (it.method == null) DiscoverySelectors.selectClass(it.cls)
                     else DiscoverySelectors.selectMethod(it.cls, it.method)
                 }
-                launcher.execute(
-                    org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request()
-                        .selectors(selectors)
-                        .build(),
-                    listener,
-                )
+                launcher.execute(request(selectors), listener)
             }
             val victimSelector = DiscoverySelectors.selectMethod(opts.victim.cls, opts.victim.method)
+            val victimRequest = request(listOf(victimSelector))
             // Повторы жертвы — отдельные discovery-запросы в ТОЙ ЖЕ JVM: платформа
             // дедуплицирует одинаковые селекторы внутри одного запроса, а состояние
             // между execute() не сбрасывается — семантика загрязнения сохраняется.
-            repeat(opts.repeat) {
-                launcher.execute(
-                    org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request()
-                        .selectors(listOf(victimSelector))
-                        .build(),
-                    listener,
-                )
+            // На каждый повтор — свой kill-watchdog (--victim-timeout).
+            for (attempt in 1..opts.repeat) {
+                val completed = executeWithTimeout(launcher, victimRequest, listener, opts.victimTimeoutSec)
+                if (!completed) {
+                    // Зависший повтор обрывает остальные: timeout -> InfraError,
+                    // повторять зависание бессмысленно.
+                    entries.add(
+                        Entry(
+                            // victim.method не-null гарантирован parseArgs (--victim обязан быть FQCN#method)
+                            opts.victim.cls, opts.victim.method!!, "FAILED",
+                            "flakydiff.victim-timeout",
+                            "victim repeat $attempt exceeded ${opts.victimTimeoutSec}s",
+                            "TEST",
+                        ),
+                    )
+                    break
+                }
             }
         } catch (t: Throwable) {
             // Ошибка на уровне движка/Launcher — честно попадает в отчёт (stage=ENGINE),
@@ -71,6 +83,42 @@ object ReplayMain {
 
         Files.writeString(Path.of(opts.report), buildJson(entries))
         return 0
+    }
+
+    private fun request(selectors: List<org.junit.platform.engine.DiscoverySelector>): LauncherDiscoveryRequest =
+        LauncherDiscoveryRequestBuilder.request().selectors(selectors).build()
+
+    /**
+     * Повтор жертвы выполняется в рабочем потоке; по истечении рамки поток
+     * прерывается. Листенер герметизируется ДО interrupt, чтобы прерванная
+     * Jupiter-фаза не дописала в отчёт лишнюю запись.
+     */
+    private fun executeWithTimeout(
+        launcher: Launcher,
+        request: LauncherDiscoveryRequest,
+        listener: CollectingListener,
+        timeoutSec: Long?,
+    ): Boolean {
+        if (timeoutSec == null) {
+            launcher.execute(request, listener)
+            return true
+        }
+        val executor = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "flakydiff-victim-repeat").apply { isDaemon = true }
+        }
+        try {
+            val future = executor.submit { launcher.execute(request, listener) }
+            return try {
+                future.get(timeoutSec, TimeUnit.SECONDS)
+                true
+            } catch (e: TimeoutException) {
+                listener.seal()
+                future.cancel(true)
+                false
+            }
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     internal data class PrefixRef(val cls: String, val method: String?)
@@ -162,7 +210,16 @@ object ReplayMain {
     )
 
     private class CollectingListener(private val out: MutableList<Entry>) : TestExecutionListener {
+        @Volatile
+        private var sealed = false
+
+        /** Больше не принимает события — вызывается при victim-timeout до interrupt. */
+        fun seal() {
+            sealed = true
+        }
+
         override fun executionFinished(identifier: TestIdentifier, result: TestExecutionResult) {
+            if (sealed) return
             if (!identifier.parentId.isPresent) return
             if (identifier.isContainer) {
                 // Успешные контейнеры (классы, движок) в отчёт не попадают; падение
@@ -199,6 +256,7 @@ object ReplayMain {
         }
 
         override fun executionSkipped(identifier: TestIdentifier, reason: String) {
+            if (sealed) return
             if (!identifier.parentId.isPresent || identifier.isContainer) return
             val (cls, method) = when (val source = identifier.source.orElse(null)) {
                 is MethodSource -> source.className to source.methodName

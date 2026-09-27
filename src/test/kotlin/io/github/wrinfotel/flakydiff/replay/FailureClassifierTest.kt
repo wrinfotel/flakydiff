@@ -22,6 +22,8 @@ class FailureClassifierTest {
             arrayOf("ENGINE", "org.junit.platform.JUnitException", FailureKind.INFRA_ERROR),
             arrayOf("TEST", "java.lang.NoClassDefFoundError", FailureKind.INFRA_ERROR),
             arrayOf("TEST", "java.lang.ClassNotFoundException", FailureKind.INFRA_ERROR),
+            // маркер watchdog'а ReplayMain (спека: victim-timeout -> InfraError):
+            arrayOf("TEST", "flakydiff.victim-timeout", FailureKind.INFRA_ERROR),
             // из любой стадии, независимо от BEFORE-правила:
             arrayOf("BEFORE_EACH", "java.lang.NoClassDefFoundError", FailureKind.INFRA_ERROR),
             arrayOf("ENGINE", "java.lang.ClassNotFoundException", FailureKind.INFRA_ERROR),

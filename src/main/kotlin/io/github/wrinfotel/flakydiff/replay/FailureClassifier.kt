@@ -19,6 +19,8 @@ object FailureClassifier {
     fun classify(stage: String?, failureType: String?): FailureKind {
         // Сломанный classpath — инфраструктура даже если вылетел из тела теста.
         if (failureType in classpathErrorTypes) return FailureKind.INFRA_ERROR
+        // Watchdog ReplayMain: повтор жертвы превысил victim-timeout (спека §4.2).
+        if (failureType == "flakydiff.victim-timeout") return FailureKind.INFRA_ERROR
         // Ошибка подготовки (@BeforeAll/@BeforeEach/движок) — не фейл теста,
         // независимо от того, какая фаза упала.
         if (stage in infraStages) return FailureKind.INFRA_ERROR
