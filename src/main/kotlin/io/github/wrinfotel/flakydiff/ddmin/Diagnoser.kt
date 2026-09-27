@@ -36,3 +36,35 @@ fun step0(harness: ReplayHarness, victim: TestRef, repeat: Int = 3): Step0Result
         ProbeOutcome.INFRA -> Step0Result.InfraBroken((result as ReplayResult.InfraError).cause)
     }
 }
+
+/** Результат шага 1 (спека §4.3): полный prefix + жертва обязан падать. */
+sealed interface Step1Result {
+    /** Полный prefix воспроизводит падение — идём в ddmin. */
+    data object ReproducedWithFullPrefix : Step1Result
+
+    /** Полный prefix НЕ воспроизводит (включая слабый сигнал) — вероятны race/время, вне v1. */
+    data class NotReproduced(val passes: Int, val attempts: Int) : Step1Result
+
+    /** Инфра сломана — чинить окружение, не тест. */
+    data class InfraBroken(val cause: String) : Step1Result
+}
+
+/**
+ * Шаг 1: полный prefix + жертва обязана падать (по критерию бакетов). PASSES и WEAK
+ * консервативно ведут в NOT_REPRODUCED — честный rate сохраняется для вердикта.
+ */
+fun step1(harness: ReplayHarness, prefix: List<TestRef>, victim: TestRef, repeat: Int = 3): Step1Result {
+    val result = harness.replay(prefix, victim, repeat)
+    return when (val outcome = classify(result)) {
+        ProbeOutcome.FAILS -> Step1Result.ReproducedWithFullPrefix
+        ProbeOutcome.PASSES, ProbeOutcome.WEAK -> {
+            val (passes, attempts) = when (result) {
+                is ReplayResult.NotReproduced -> result.passes to result.attempts
+                is ReplayResult.Reproduced -> (result.attempts - result.failures) to result.attempts
+                is ReplayResult.InfraError -> error("unreachable: INFRA handled below")
+            }
+            Step1Result.NotReproduced(passes, attempts)
+        }
+        ProbeOutcome.INFRA -> Step1Result.InfraBroken((result as ReplayResult.InfraError).cause)
+    }
+}

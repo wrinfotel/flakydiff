@@ -49,3 +49,47 @@ class DiagnoserTest {
         assertEquals(Step0Result.InfraBroken("classpath broken"), step0(h, victim))
     }
 }
+
+/**
+ * Шаг 1 ddmin (план Task 3.3, спека §4.3): полный prefix + жертва обязана падать —
+ * иначе NOT_REPRODUCED (вероятны race/время — вне v1).
+ */
+class Step1Test {
+
+    private val victim = TestRef("com.example.VictimTest", "flaky")
+    private val prefix = listOf(
+        TestRef("com.example.PolluterTest", "poison"),
+        TestRef("com.example.BallastTest", "m1"),
+    )
+
+    @Test
+    fun `full prefix fails - proceed to ddmin`() {
+        val h = FakeHarness { p, v, rep ->
+            check(v == victim)
+            if (p == prefix) ReplayResult.Reproduced(rep, rep, io.github.wrinfotel.flakydiff.reader.TestFailure("java.lang.AssertionError", "boom", null))
+            else ReplayResult.NotReproduced(rep, rep)
+        }
+        assertEquals(Step1Result.ReproducedWithFullPrefix, step1(h, prefix, victim))
+        // зонд шага 1 — именно полный prefix + жертва
+        assertEquals(prefix, h.calls.single().prefix)
+        assertEquals(3, h.calls.single().repeat)
+    }
+
+    @Test
+    fun `prefix does not poison - NOT_REPRODUCED with honest rate`() {
+        val h = FakeHarness.fromBooleans(listOf(false, false, false), victim)
+        assertEquals(Step1Result.NotReproduced(passes = 3, attempts = 3), step1(h, prefix, victim))
+    }
+
+    @Test
+    fun `weak signal at step 1 - NOT_REPRODUCED (1 of 3 failed)`() {
+        val h = FakeHarness.fromBooleans(listOf(true, false, false), victim)
+        assertEquals(Step1Result.NotReproduced(passes = 2, attempts = 3), step1(h, prefix, victim))
+    }
+
+    @Test
+    fun `infra at step 1 - INFRA_BROKEN`() {
+        val h = FakeHarness { _, _, _ -> ReplayResult.InfraError("compilation failed") }
+        assertEquals(Step1Result.InfraBroken("compilation failed"), step1(h, prefix, victim))
+    }
+}
