@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        jdk: [ 17, 21 ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.jdk }}
+      - name: Unit tests (fast profile)
+        run: mvn -B verify -P fast
+
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        jdk: [ 17, 21 ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.jdk }}
+      # интеграционные тесты появятся на этапе 4; профили гарантируют, что
+      # excludedGroups из fast не задавит тег integration в full
+      - name: Integration tests (full profile)
+        run: mvn -B verify -P full
