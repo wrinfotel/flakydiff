@@ -10,15 +10,28 @@ data class ReadResult(
     val orderSource: OrderSource,
     val orderUnreliable: Boolean,
     val errors: List<ReaderError> = emptyList(),
+    val forksPossible: Boolean = true,
 )
 
+/** Опции чтения отчётов. sequential — аналог флага --sequential (null = не передан);
+ *  noForks — аналог --no-forks (форки в XML не детектятся, честный флаг). */
+data class ReadOptions(val sequential: Boolean? = null, val noForks: Boolean = false)
+
 private const val GRANULARITY_MS = 1000L
+
+/** Итоговый API reader'а: директория XML-отчётов → ReadResult. */
+fun readReports(dir: Path, options: ReadOptions = ReadOptions()): ReadResult =
+    readDirectoryImpl(dir, options.sequential).copy(forksPossible = !options.noForks)
+
+/** Внутренний шаг к readReports (Task 1.4), оставлен для совместимости. */
+fun readDirectory(dir: Path, sequential: Boolean?): ReadResult =
+    readDirectoryImpl(dir, sequential)
 
 /** Читает директорию XML-отчётов и восстанавливает порядок классов.
  *  Семантика `sequential` (спека §4.1, блокирующее правило):
  *  null/false → order_unreliable=true всегда; true снимает флаг только при
  *  источнике TIMESTAMP без срабатывания эвристики недостоверности. */
-fun readDirectory(dir: Path, sequential: Boolean?): ReadResult {
+private fun readDirectoryImpl(dir: Path, sequential: Boolean?): ReadResult {
     val xmlFiles = Files.list(dir).use { stream ->
         stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".xml") }
             .sorted()
