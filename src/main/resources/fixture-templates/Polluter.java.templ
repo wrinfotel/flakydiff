@@ -1,0 +1,12 @@
+package io.github.wrinfotel.fixture;
+
+import org.junit.jupiter.api.Test;
+
+/** Polluter: грязнит ключ «{{KEY}}», который читает жертва. */
+public class {{NAME}} {
+
+    @Test
+    void pollutes() {
+        PollutionState.pollute("{{KEY}}");
+    }
+}

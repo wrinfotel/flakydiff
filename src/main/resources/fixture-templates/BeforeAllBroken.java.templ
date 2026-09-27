@@ -1,0 +1,22 @@
+package io.github.wrinfotel.fixture;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+/**
+ * @BeforeAll требует системное свойство «{{KEY}}»: без него — падение стадии
+ * подготовки, которое FailureClassifier относит к INFRA (спека §4.2), не фейл теста.
+ */
+public class {{NAME}} {
+
+    @BeforeAll
+    static void requireGuard() {
+        if (System.getProperty("{{KEY}}") == null) {
+            throw new IllegalStateException("guard property {{KEY}} is missing");
+        }
+    }
+
+    @Test
+    void shouldPassIfReached() {
+    }
+}

@@ -1,0 +1,25 @@
+package io.github.wrinfotel.fixture;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Общая статика fixture-проекта: polluter «грязнит» ключ, victim ассертит чистоту.
+ * Живёт одну JVM (записанный прогон или зонд) — семантика загрязнения спеки §4.2:
+ * состояние между повторами жертвы не сбрасывается, между зондами не переносится.
+ */
+public final class PollutionState {
+
+    private static final Map<String, Boolean> POLLUTED = new HashMap<>();
+
+    private PollutionState() {
+    }
+
+    public static void pollute(String key) {
+        POLLUTED.put(key, Boolean.TRUE);
+    }
+
+    public static boolean isPolluted(String key) {
+        return POLLUTED.getOrDefault(key, Boolean.FALSE);
+    }
+}

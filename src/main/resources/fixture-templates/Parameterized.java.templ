@@ -1,0 +1,17 @@
+package io.github.wrinfotel.fixture;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+/**
+ * Параметризованный тест (для UNSUPPORTED): в surefire-XML каждая инвокация
+ * записывается как «check(int)[N]» — display name, не адресуемый напрямую.
+ */
+public class {{NAME}} {
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    void check(int value) {
+        org.junit.jupiter.api.Assertions.assertTrue(value > 0);
+    }
+}

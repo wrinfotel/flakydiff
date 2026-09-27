@@ -1,0 +1,14 @@
+package io.github.wrinfotel.fixture;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+/** Жертва: ассертит, что ключ «{{KEY}}» чист. Падает только после polluter. */
+public class {{NAME}} {
+
+    @Test
+    void shouldWork() {
+        assertFalse(PollutionState.isPolluted("{{KEY}}"), "victim sees polluted state for {{KEY}}");
+    }
+}

@@ -1,0 +1,27 @@
+package io.github.wrinfotel.fixture;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Жертва с граничным счётом для confirmation (спека §5 кейс 10): под загрязнением
+ * ключа «{{KEY}}» падает на запусках 2–4 — в зонде repeat=3 даёт 2/3 упавших
+ * (ddmin воспроизводит), в confirmation repeat=5 даёт ровно 3/5 упавших (<4 →
+ * UNCONFIRMED). Чистая JVM — все повторы проходят. Счётчик живёт одну JVM зонда,
+ * между зондами не переносится. Моделирует жертву с ограниченным «окном флейка».
+ */
+public class {{NAME}} {
+
+    private static final AtomicInteger RUNS = new AtomicInteger();
+
+    @Test
+    void shouldWork() {
+        if (PollutionState.isPolluted("{{KEY}}")) {
+            int n = RUNS.incrementAndGet();
+            if (n >= 2 && n <= 4) {
+                throw new AssertionError("polluted victim run " + n);
+            }
+        }
+    }
+}
