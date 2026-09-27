@@ -7,7 +7,7 @@ import org.w3c.dom.Node
 import org.xml.sax.SAXException
 
 sealed interface ParseOutcome {
-    data class Ok(val entries: List<TestExecution>) : ParseOutcome
+    data class Ok(val file: ParsedFile) : ParseOutcome
     data class Failed(val error: ReaderError) : ParseOutcome
 }
 
@@ -39,6 +39,7 @@ fun parse(xml: String): ParseOutcome {
 
     val testcases = doc.getElementsByTagName("testcase")
     val result = mutableListOf<TestExecution>()
+    val markedFlaky = mutableSetOf<TestRef>()
     for (i in 0 until testcases.length) {
         val tc = testcases.item(i) as Element
         val ref = TestRef(tc.getAttribute("classname"), tc.getAttribute("name"))
@@ -52,6 +53,16 @@ fun parse(xml: String): ParseOutcome {
                         status = Status.FAILED
                         failure = failurePayload(child)
                     }
+                    // rerun-элементы (rerunFailingTestsCount): flaky* — упал, перезапуск прошёл,
+                    // rerun* — упал и перезапуск тоже. Первый прогон — сам testcase: прямой
+                    // <failure>/<error>, а для flaky* — сам rerun-элемент описывает первую попытку.
+                    "flakyFailure", "flakyError", "rerunFailure", "rerunError" -> {
+                        markedFlaky += ref
+                        if (failure == null) {
+                            status = Status.FAILED
+                            failure = failurePayload(child)
+                        }
+                    }
                     "skipped" -> status = Status.SKIPPED
                 }
             }
@@ -59,5 +70,5 @@ fun parse(xml: String): ParseOutcome {
         }
         result += TestExecution(ref, status, durationMs(tc), failure)
     }
-    return ParseOutcome.Ok(result)
+    return ParseOutcome.Ok(ParsedFile(result, markedFlaky))
 }

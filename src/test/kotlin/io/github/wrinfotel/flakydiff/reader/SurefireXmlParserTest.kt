@@ -11,7 +11,7 @@ class SurefireXmlParserTest {
         javaClass.getResourceAsStream("/xml/$name")!!.readBytes().decodeToString()
 
     private fun parseOk(xml: String): List<TestExecution> =
-        (parse(xml) as ParseOutcome.Ok).entries
+        (parse(xml) as ParseOutcome.Ok).file.entries
 
     @Test
     fun `parses surefire xml with one passing and one failing testcase`() {
@@ -99,5 +99,55 @@ class SurefireXmlParserTest {
         val error = (outcome as ParseOutcome.Failed).error
         assertTrue(error.message.isNotBlank())
         assertTrue(error.cause != null)
+    }
+
+    @Test
+    fun `rerun elements dedup to one entry, first run taken, victim marked flaky`() {
+        val outcome = parse(resource("rerun-flaky.xml"))
+        assertTrue(outcome is ParseOutcome.Ok)
+        val file = (outcome as ParseOutcome.Ok).file
+
+        val run = buildTestRun(listOf(file))
+
+        assertEquals(3, run.entries.size)
+
+        val flaky = run.entries.first { it.ref.method == "flakyPass" }
+        assertEquals(Status.FAILED, flaky.status)
+        assertEquals(
+            TestFailure("java.lang.AssertionError", "first attempt failed", "first attempt stack"),
+            flaky.failure,
+        )
+
+        val rerun = run.entries.first { it.ref.method == "rerunFail" }
+        assertEquals(Status.FAILED, rerun.status)
+        assertEquals(
+            TestFailure("java.lang.AssertionError", "original fail", "original stack"),
+            rerun.failure,
+        )
+
+        val plain = run.entries.first { it.ref.method == "plainPass" }
+        assertEquals(Status.PASSED, plain.status)
+
+        assertEquals(2, run.markedFlaky.size)
+        assertTrue(run.markedFlaky.contains(TestRef("com.acme.FlakeTest", "flakyPass")))
+        assertTrue(run.markedFlaky.contains(TestRef("com.acme.FlakeTest", "rerunFail")))
+    }
+
+    @Test
+    fun `duplicate testcase entries across files keep first run`() {
+        val first = ParsedFile(
+            entries = listOf(TestExecution(TestRef("com.acme.FlakeTest", "flakyPass"), Status.FAILED, 100L, null)),
+            markedFlaky = emptySet(),
+        )
+        val second = ParsedFile(
+            entries = listOf(TestExecution(TestRef("com.acme.FlakeTest", "flakyPass"), Status.PASSED, 200L, null)),
+            markedFlaky = emptySet(),
+        )
+
+        val run = buildTestRun(listOf(first, second))
+
+        assertEquals(1, run.entries.size)
+        assertEquals(Status.FAILED, run.entries[0].status)
+        assertEquals(100L, run.entries[0].durationMs)
     }
 }

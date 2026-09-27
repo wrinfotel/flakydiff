@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.acme.FlakeTest" time="0.6" tests="3" failures="2" errors="0" skipped="0" rerunFailingTestsCount="2">
+  <testcase name="plainPass" classname="com.acme.FlakeTest" time="0.1"/>
+  <testcase name="flakyPass" classname="com.acme.FlakeTest" time="0.2">
+    <flakyFailure message="first attempt failed" type="java.lang.AssertionError">first attempt stack</flakyFailure>
+  </testcase>
+  <testcase name="rerunFail" classname="com.acme.FlakeTest" time="0.3">
+    <failure message="original fail" type="java.lang.AssertionError">original stack</failure>
+    <rerunFailure message="rerun also failed" type="java.lang.AssertionError">rerun stack</rerunFailure>
+  </testcase>
+</testsuite>
