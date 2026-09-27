@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.acme.OrderServiceTest" time="0.35" tests="2" failures="1" errors="0" skipped="0" hostname="localhost">
+  <properties>
+    <property name="java.version" value="21.0.12"/>
+  </properties>
+  <testcase name="shouldCharge" classname="com.acme.OrderServiceTest" time="0.2"/>
+  <testcase name="shouldRender" classname="com.acme.OrderServiceTest" time="0.15">
+    <failure message="x" type="java.lang.AssertionError">stack trace body</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
