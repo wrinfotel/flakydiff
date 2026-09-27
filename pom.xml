@@ -19,6 +19,7 @@
     <picocli.version>4.7.6</picocli.version>
     <kotlinx-serialization.version>1.7.3</kotlinx-serialization.version>
     <surefire.version>3.5.2</surefire.version>
+    <shade.version>3.6.0</shade.version>
   </properties>
 
   <dependencyManagement>
@@ -56,10 +57,13 @@
       <artifactId>kotlinx-serialization-json</artifactId>
       <version>${kotlinx-serialization.version}</version>
     </dependency>
+    <!-- jupiter (api+engine) нужен в рантайме зондов: Launcher без движка мёртв, а
+         replay-jar обязан доносить TestEngine до проектов без jupiter в deps.
+         Версию держит junit BOM; в команде зонда classpath проекта первым —
+         движок проекта пользователя всегда выигрывает. -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 
@@ -98,6 +102,86 @@
             <goals>
               <goal>test-compile</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Два execution одного shade-плагина = второй артефакт flakydiff-replay без
+           второго модуля (спека v1.5). Порядок важен: сначала attached replay-jar
+           (основной артефакт не трогаем), затем cli-shade затеняет основной jar. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${shade.version}</version>
+        <executions>
+          <execution>
+            <id>replay-shade</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>replay</shadedClassifierName>
+              <!-- flakydiff не публикует затенённый pom; CLI-дистрибутив собирается локально -->
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <!-- зонду не нужны CLI-зависимости; поэтому ReplayMain сериализует JSON вручную,
+                   а kotlinx-serialization остаётся на CLI-стороне -->
+              <artifactSet>
+                <excludes>
+                  <artifact>info.picocli:*</artifact>
+                  <artifact>org.jetbrains.kotlinx:*</artifact>
+                </excludes>
+              </artifactSet>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                    <exclude>META-INF/versions/*/module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <transformers>
+                <!-- JUnit Platform находит TestEngine через SPI: файлы META-INF/services/*
+                     из разных jars обязаны склеиться, иначе Launcher не увидит движок -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <manifestEntries>
+                    <Main-Class>io.github.wrinfotel.flakydiff.replay.ReplayMain</Main-Class>
+                  </manifestEntries>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+          <execution>
+            <id>cli-shade</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>false</shadedArtifactAttached>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                    <exclude>META-INF/versions/*/module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <!-- Main-Class CLI добавит Task 5.x, когда появится точка входа -->
+              </transformers>
+            </configuration>
           </execution>
         </executions>
       </plugin>
