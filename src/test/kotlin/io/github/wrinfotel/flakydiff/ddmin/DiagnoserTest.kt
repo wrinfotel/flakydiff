@@ -93,3 +93,101 @@ class Step1Test {
         assertEquals(Step1Result.InfraBroken("compilation failed"), step1(h, prefix, victim))
     }
 }
+
+/**
+ * Полный пайплайн diagnose (план Task 3.5, спека §4.3): step0 → step1 → ddmin →
+ * fresh-process confirmation (repeat=5, критерий сознательно строже ddmin — ≥4 из 5).
+ */
+class DiagnoseTest {
+
+    private val victim = TestRef("com.example.VictimTest", "flaky")
+    private val failure = io.github.wrinfotel.flakydiff.reader.TestFailure("java.lang.AssertionError", "boom", null)
+
+    /** step0 проходит, step1 и ddmin видят polluter, confirmation (repeat=5) задаёт сценарий. */
+    private fun harnessWithConfirmation(confirmation: ReplayResult, polluter: TestRef): FakeHarness =
+        FakeHarness { p, v, rep ->
+            check(v == victim)
+            when {
+                rep == 5 -> confirmation // единственный вызов с repeat=5 — confirmation
+                p.isEmpty() -> ReplayResult.NotReproduced(3, 3) // step0: изолированно проходит
+                polluter in p -> ReplayResult.Reproduced(rep, rep, failure)
+                else -> ReplayResult.NotReproduced(rep, rep)
+            }
+        }
+
+    private fun prefixWith(polluter: TestRef, size: Int = 10): List<TestRef> {
+        val prefix = (0 until size).map { TestRef("com.example.BallastTest", "m$it") }.toMutableList()
+        prefix[4] = polluter
+        return prefix
+    }
+
+    @Test
+    fun `polluter found, confirmed 5 of 5 - ORDER_DEPENDENCY`() {
+        val polluter = TestRef("com.example.PolluterTest", "p")
+        val h = harnessWithConfirmation(ReplayResult.Reproduced(5, 5, failure), polluter)
+
+        val result = diagnose(h, victim, prefixWith(polluter))
+
+        assertEquals(
+            io.github.wrinfotel.flakydiff.ddmin.Diagnosis.OrderDependency(
+                victim, listOf(polluter), failure, confirmationFailures = 5, confirmationAttempts = 5,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `confirmed 4 of 5 - boundary still ORDER_DEPENDENCY`() {
+        val polluter = TestRef("com.example.PolluterTest", "p")
+        val h = harnessWithConfirmation(ReplayResult.Reproduced(4, 5, failure), polluter)
+
+        val result = diagnose(h, victim, prefixWith(polluter))
+
+        assertEquals(
+            io.github.wrinfotel.flakydiff.ddmin.Diagnosis.OrderDependency(
+                victim, listOf(polluter), failure, confirmationFailures = 4, confirmationAttempts = 5,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `confirmation 3 of 5 - UNCONFIRMED with actual rate`() {
+        val polluter = TestRef("com.example.PolluterTest", "p")
+        val h = harnessWithConfirmation(ReplayResult.Reproduced(3, 5, failure), polluter)
+
+        val result = diagnose(h, victim, prefixWith(polluter))
+
+        assertEquals(
+            io.github.wrinfotel.flakydiff.ddmin.Diagnosis.Unconfirmed(
+                victim, listOf(polluter), confirmationFailures = 3, confirmationAttempts = 5,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `confirmation 0 of 5 - UNCONFIRMED with honest rate`() {
+        val polluter = TestRef("com.example.PolluterTest", "p")
+        val h = harnessWithConfirmation(ReplayResult.NotReproduced(5, 5), polluter)
+
+        val result = diagnose(h, victim, prefixWith(polluter))
+
+        assertEquals(
+            io.github.wrinfotel.flakydiff.ddmin.Diagnosis.Unconfirmed(
+                victim, listOf(polluter), confirmationFailures = 0, confirmationAttempts = 5,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `infra at confirmation - INFRA_BROKEN, not UNCONFIRMED`() {
+        val polluter = TestRef("com.example.PolluterTest", "p")
+        val h = harnessWithConfirmation(ReplayResult.InfraError("probe timeout"), polluter)
+
+        val result = diagnose(h, victim, prefixWith(polluter))
+
+        assertEquals(io.github.wrinfotel.flakydiff.ddmin.Diagnosis.InfraBroken("probe timeout"), result)
+    }
+}
