@@ -1,0 +1,2 @@
+<testsuite name="com.acme.BrokenTest" time="0.1" tests="1">
+  <testcase name="shouldParse" classname="com.acme.BrokenTest" time="0.1">

@@ -14,3 +14,6 @@ data class TestExecution(
 )
 
 data class TestRun(val entries: List<TestExecution>)
+
+data class ReaderError(val message: String, val cause: String? = null)
+

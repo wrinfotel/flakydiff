@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.acme.OrderServiceTest" time="0.5" tests="2" failures="0" errors="1" skipped="1">
+  <testcase name="shouldCharge" classname="com.acme.OrderServiceTest" time="0.3">
+    <error message="boom" type="java.lang.IllegalStateException">stack of error</error>
+  </testcase>
+  <testcase name="shouldChargeRefund" classname="com.acme.OrderServiceTest" time="0.2">
+    <skipped message="not today"/>
+  </testcase>
+</testsuite>

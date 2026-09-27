@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.acme.OrderServiceTest" time="0.35" tests="2" failures="1" errors="0" skipped="0">
+  <testcase name="shouldCharge" classname="com.acme.OrderServiceTest" time="0.2"/>
+  <testcase name="shouldRender" classname="com.acme.OrderServiceTest" time="0.15">
+    <failure message="expected: 1 but was: 2" type="junit.framework.ComparisonFailure">org.opentest4j.AssertionFailedError: expected: &lt;1&gt; but was: &lt;2&gt;
+	at com.acme.OrderServiceTest.shouldRender(OrderServiceTest.java:42)
+</failure>
+  </testcase>
+  <system-out><![CDATA[stdout from tests]]></system-out>
+  <system-err><![CDATA[stderr from tests]]></system-err>
+</testsuite>

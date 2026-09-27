@@ -1,13 +1,20 @@
 package io.github.wrinfotel.flakydiff.reader
 
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.roundToLong
 import org.w3c.dom.Element
-import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Node
+import org.xml.sax.SAXException
 
-private fun newDocument(xml: String) =
+sealed interface ParseOutcome {
+    data class Ok(val entries: List<TestExecution>) : ParseOutcome
+    data class Failed(val error: ReaderError) : ParseOutcome
+}
+
+private fun newDocumentBuilder() =
     DocumentBuilderFactory.newInstance().apply {
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-    }.newDocumentBuilder().parse(xml.byteInputStream())
+    }.newDocumentBuilder()
 
 private fun durationMs(tc: Element): Long {
     val time = tc.getAttribute("time")
@@ -15,29 +22,42 @@ private fun durationMs(tc: Element): Long {
     return (time.toDouble() * 1000).roundToLong()
 }
 
-fun parse(xml: String): List<TestExecution> {
-    val doc = newDocument(xml)
+private fun failurePayload(el: Element): TestFailure = TestFailure(
+    type = el.getAttribute("type").ifEmpty { null },
+    message = el.getAttribute("message").ifEmpty { null },
+    content = el.textContent.ifEmpty { null },
+)
+
+fun parse(xml: String): ParseOutcome {
+    val doc = try {
+        newDocumentBuilder().parse(xml.byteInputStream())
+    } catch (e: SAXException) {
+        return ParseOutcome.Failed(ReaderError("Broken XML report", cause = e.message))
+    } catch (e: java.io.IOException) {
+        return ParseOutcome.Failed(ReaderError("Failed to read XML report", cause = e.message))
+    }
+
     val testcases = doc.getElementsByTagName("testcase")
     val result = mutableListOf<TestExecution>()
     for (i in 0 until testcases.length) {
         val tc = testcases.item(i) as Element
         val ref = TestRef(tc.getAttribute("classname"), tc.getAttribute("name"))
-        val failureElement = tc.getElementsByTagName("failure")
-        if (failureElement.length > 0) {
-            val f = failureElement.item(0) as Element
-            result += TestExecution(
-                ref = ref,
-                status = Status.FAILED,
-                durationMs = durationMs(tc),
-                failure = TestFailure(
-                    type = f.getAttribute("type").ifEmpty { null },
-                    message = f.getAttribute("message").ifEmpty { null },
-                    content = f.textContent.ifEmpty { null },
-                ),
-            )
-        } else {
-            result += TestExecution(ref, Status.PASSED, durationMs(tc), failure = null)
+        var status = Status.PASSED
+        var failure: TestFailure? = null
+        var child: Node? = tc.firstChild
+        while (child != null) {
+            if (child is Element) {
+                when (child.tagName) {
+                    "failure", "error" -> {
+                        status = Status.FAILED
+                        failure = failurePayload(child)
+                    }
+                    "skipped" -> status = Status.SKIPPED
+                }
+            }
+            child = child.nextSibling
         }
+        result += TestExecution(ref, status, durationMs(tc), failure)
     }
-    return result
+    return ParseOutcome.Ok(result)
 }
