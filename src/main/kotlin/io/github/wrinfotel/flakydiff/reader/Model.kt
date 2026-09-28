@@ -1,5 +1,9 @@
 package io.github.wrinfotel.flakydiff.reader
 
+import kotlinx.serialization.Serializable
+
+/** Ссылка на тест: FQCN класса + имя метода. @Serializable — вердикт уходит в JSON (Task 5.2). */
+@Serializable
 data class TestRef(val testClass: String, val method: String)
 
 enum class Status { PASSED, FAILED, SKIPPED }

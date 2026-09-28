@@ -2,11 +2,13 @@ package io.github.wrinfotel.flakydiff.verdict
 
 import io.github.wrinfotel.flakydiff.ddmin.Diagnosis
 import io.github.wrinfotel.flakydiff.reader.TestRef
+import kotlinx.serialization.Serializable
 
 /**
  * Реестр имён (план Task 5.1): в коде/JSON — подчёркивания, в чек-листе §5 спеки —
  * те же через дефис (NOT_ISOLATED = NOT-ISOLATED): это отображение одного и того же.
  */
+@Serializable
 enum class VerdictType {
     ORDER_DEPENDENCY,
     NOT_ISOLATED,
@@ -16,6 +18,7 @@ enum class VerdictType {
     UNSUPPORTED,
 }
 
+@Serializable
 data class DiagnoseVerdict(
     val type: VerdictType,
     val victim: TestRef?,
