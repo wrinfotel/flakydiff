@@ -50,13 +50,11 @@ class FlakydiffCli : Callable<Int> {
         spec.commandLine().usage(spec.commandLine().out)
         return 2
     }
+}
 
-    companion object {
-        @JvmStatic
-        fun main(args: Array<String>) {
-            exitProcess(CommandLine(FlakydiffCli()).execute(*args))
-        }
-    }
+/** Точка входа дистрибуции: Main-Class = FlakydiffCliKt (top-level main). */
+fun main(args: Array<String>) {
+    exitProcess(CommandLine(FlakydiffCli()).execute(*args))
 }
 
 private const val DEFAULT_REPEAT = 3
