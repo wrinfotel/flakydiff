@@ -1,11 +1,14 @@
 package io.github.wrinfotel.flakydiff.replay
 
+import org.junit.platform.engine.FilterResult
+import org.junit.platform.engine.TestDescriptor
 import org.junit.platform.engine.TestExecutionResult
 import org.junit.platform.engine.discovery.DiscoverySelectors
 import org.junit.platform.engine.support.descriptor.ClassSource
 import org.junit.platform.engine.support.descriptor.MethodSource
 import org.junit.platform.launcher.Launcher
 import org.junit.platform.launcher.LauncherDiscoveryRequest
+import org.junit.platform.launcher.PostDiscoveryFilter
 import org.junit.platform.launcher.TestExecutionListener
 import org.junit.platform.launcher.TestIdentifier
 import org.junit.platform.launcher.TestPlan
@@ -46,11 +49,50 @@ object ReplayMain {
 
         try {
             if (opts.prefix.isNotEmpty()) {
-                val selectors = opts.prefix.map {
-                    if (it.method == null) DiscoverySelectors.selectClass(it.cls)
-                    else DiscoverySelectors.selectMethod(it.cls, it.method)
+                // Отбор по классу + postDiscoveryFilter префиксом имени (план
+                // Task 4.3): display-name ссылка параметризованного теста
+                // (check(int)[2]) адресуется классом + фильтром листьев по префиксу
+                // имени — типы параметров из display-name не парсим, движок прогоняет
+                // все invocations. Голый selectMethod по имени не подходит: он ищет
+                // no-arg метод и не находит параметризованный.
+                val prefixRequest = LauncherDiscoveryRequestBuilder.request()
+                    .selectors(opts.prefix.map { DiscoverySelectors.selectClass(it.cls) }.distinct())
+                    .filters(
+                        PostDiscoveryFilter { descriptor ->
+                            if (opts.prefix.any { leafMatches(it, descriptor) }) {
+                                FilterResult.included(null)
+                            } else {
+                                FilterResult.excluded(null)
+                            }
+                        },
+                    )
+                    .build()
+                launcher.execute(prefixRequest, listener)
+
+                // Честность (план Task 4.3): каждая prefix-ссылка обязана быть
+                // адресованной — строкой отчёта (метод) или исполненным контейнером
+                // (целый класс). Неадресованная ссылка делает зонд невалидным:
+                // честная строка flakydiff.prefix-unresolved (stage=ENGINE →
+                // InfraError у харнесса), не молчаливый пропуск.
+                val prefixRows = entries.toList()
+                for (ref in opts.prefix) {
+                    val addressed = if (ref.method == null) {
+                        listener.executedClasses.contains(ref.cls)
+                    } else {
+                        prefixRows.any { it.cls == ref.cls && it.method == effectiveMethodName(ref.method) }
+                    }
+                    if (!addressed) {
+                        entries.add(
+                            Entry(
+                                ref.cls, ref.method ?: "", "FAILED",
+                                "flakydiff.prefix-unresolved",
+                                "prefix entry not addressable: ${ref.cls}#${ref.method ?: "<class>"}, " +
+                                    "fallback did not resolve it",
+                                "ENGINE",
+                            ),
+                        )
+                    }
                 }
-                launcher.execute(request(selectors), listener)
             }
             val victimSelector = DiscoverySelectors.selectMethod(opts.victim.cls, opts.victim.method)
             val victimRequest = request(listOf(victimSelector))
@@ -87,6 +129,31 @@ object ReplayMain {
 
     private fun request(selectors: List<org.junit.platform.engine.DiscoverySelector>): LauncherDiscoveryRequest =
         LauncherDiscoveryRequestBuilder.request().selectors(selectors).build()
+
+    /**
+     * display-name invocation (содержит '(' или '[') адресуется по базовому
+     * имени метода; обычное имя метода не содержит этих символов — идентификаторы
+     * Java/Kotlin (кроме backtick-имен) их не допускают.
+     */
+    private fun isDisplayName(method: String): Boolean = method.contains('(') || method.contains('[')
+
+    private fun effectiveMethodName(method: String): String =
+        if (isDisplayName(method)) method.substringBefore('(').substringBefore('[').trim() else method
+
+    /**
+     * Фильтр листьев для «отбора по классу + префикс имени»: ссылка на весь
+     * класс пропускает любой его метод; обычное имя — точное совпадение;
+     * display-name — имя метода или display-name листа с префиксом «base(»
+     * (invocations параметризованного теста).
+     */
+    private fun leafMatches(ref: PrefixRef, descriptor: TestDescriptor): Boolean {
+        val source = descriptor.source.orElse(null)
+        if (source !is MethodSource || source.className != ref.cls) return false
+        val method = ref.method ?: return true
+        if (!isDisplayName(method)) return source.methodName == method
+        val base = effectiveMethodName(method)
+        return source.methodName == base || descriptor.displayName.startsWith("$base(")
+    }
 
     /**
      * Повтор жертвы выполняется в рабочем потоке; по истечении рамки поток
@@ -213,9 +280,18 @@ object ReplayMain {
         @Volatile
         private var sealed = false
 
+        /** Контейнеры-классы, начавшие исполнение, — для честности prefix-ссылок на весь класс. */
+        val executedClasses = mutableSetOf<String>()
+
         /** Больше не принимает события — вызывается при victim-timeout до interrupt. */
         fun seal() {
             sealed = true
+        }
+
+        override fun executionStarted(identifier: TestIdentifier) {
+            if (sealed) return
+            if (!identifier.parentId.isPresent || !identifier.isContainer) return
+            (identifier.source.orElse(null) as? ClassSource)?.let { executedClasses.add(it.className) }
         }
 
         override fun executionFinished(identifier: TestIdentifier, result: TestExecutionResult) {

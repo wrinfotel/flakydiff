@@ -2,6 +2,8 @@ package io.github.wrinfotel.flakydiff.replay
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 /**
  * Фиктивные тестовые классы для запуска ReplayMain в свежей JVM (Task 2.1).
@@ -43,5 +45,13 @@ class FakeTwoMethods {
     @Test
     fun second() {
         // ничего не делает
+    }
+}
+
+class FakeParamMethod {
+    @ParameterizedTest
+    @ValueSource(ints = [1, 2, 3])
+    fun check(value: Int) {
+        // ничего не делает: важен сам набор display-name invocations
     }
 }

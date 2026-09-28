@@ -45,6 +45,7 @@ class ReplayMainTest {
             TestRun::class.java,          // target/classes (main-код flakydiff)
             LauncherFactory::class.java,  // junit-platform-launcher
             JupiterTestEngine::class.java,// junit-jupiter-engine
+            org.junit.jupiter.params.ParameterizedTest::class.java, // junit-jupiter-params
             org.junit.jupiter.api.Test::class.java, // junit-jupiter-api
             org.opentest4j.AssertionFailedError::class.java, // opentest4j
             TestEngine::class.java,       // junit-platform-engine
@@ -238,5 +239,59 @@ class ReplayMainTest {
         )
         assertTrue(proc.exitValue() != 0, "N<3 обязан быть отклонён ненулевым кодом выхода")
         assertTrue(!Files.exists(report), "отчёт при ошибке аргументов не пишется")
+    }
+
+    @Test
+    fun `display-name prefix entry falls back to base method and runs all invocations`() {
+        val report = tmp.resolve("report.json")
+        val (proc, output) = runReplay(
+            report,
+            "--prefix", "io.github.wrinfotel.flakydiff.replay.FakeParamMethod#check(int)[2]",
+            "--victim", "io.github.wrinfotel.flakydiff.replay.FakeFailing#alwaysFails",
+        )
+        assertEquals(0, proc.exitValue(), "output:\n$output")
+
+        val entries = readEntries(report)
+        val paramRows = entries.filter {
+            it["class"]?.jsonPrimitive?.content == "io.github.wrinfotel.flakydiff.replay.FakeParamMethod"
+        }
+        assertEquals(3, paramRows.size, "fallback обязан прогнать все invocations:\n${report.readText()}")
+        assertEquals(setOf("check"), paramRows.map { it["method"]?.jsonPrimitive?.content }.toSet())
+        paramRows.forEach { assertEquals("PASSED", it["status"]?.jsonPrimitive?.content) }
+        assertTrue(
+            entries.none { it["failureType"]?.jsonPrimitive?.content == "flakydiff.prefix-unresolved" },
+            "адресованная фолбэком ссылка не помечается: ${report.readText()}",
+        )
+        assertEquals(
+            3,
+            entries.count { it["class"]?.jsonPrimitive?.content == "io.github.wrinfotel.flakydiff.replay.FakeFailing" },
+            "жертва повторяется как обычно:\n${report.readText()}",
+        )
+    }
+
+    @Test
+    fun `unresolvable prefix entry is reported as prefix-unresolved, not silently dropped`() {
+        val report = tmp.resolve("report.json")
+        val (proc, output) = runReplay(
+            report,
+            "--prefix", "io.github.wrinfotel.flakydiff.replay.FakePassing#noSuchMethod",
+            "--victim", "io.github.wrinfotel.flakydiff.replay.FakeFailing#alwaysFails",
+        )
+        assertEquals(0, proc.exitValue(), "output:\n$output")
+
+        val entries = readEntries(report)
+        val unresolved = entries.filter {
+            it["failureType"]?.jsonPrimitive?.content == "flakydiff.prefix-unresolved"
+        }
+        assertEquals(1, unresolved.size, "report:\n${report.readText()}")
+        val row = unresolved[0]
+        assertEquals("io.github.wrinfotel.flakydiff.replay.FakePassing", row["class"]?.jsonPrimitive?.content)
+        assertEquals("noSuchMethod", row["method"]?.jsonPrimitive?.content)
+        assertEquals("FAILED", row["status"]?.jsonPrimitive?.content)
+        assertEquals("ENGINE", row["stage"]?.jsonPrimitive?.content)
+        assertTrue(
+            (row["failureMessage"]?.jsonPrimitive?.content ?: "").contains("not addressable"),
+            "диагностика с причиной: ${report.readText()}",
+        )
     }
 }

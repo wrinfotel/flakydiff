@@ -100,6 +100,14 @@ sealed interface Diagnosis {
 
     /** Инфра сломана (единая политика §4.3): чинить окружение, не тест; сужений не показываем. */
     data class InfraBroken(val cause: String) : Diagnosis
+
+    /**
+     * Форма жертвы, которую v1 не диагностирует (план Task 4.3): display-name
+     * invocation параметризованного теста (check(int)[1]). Фолбэк «класс +
+     * префикс имени» гоняет все invocations разом и не изолирует отдельный
+     * повтор — честный отказ с именем теста, БЕЗ зондов и без сужений.
+     */
+    data class Unsupported(val victim: TestRef, val reason: String) : Diagnosis
 }
 
 /** Confirmation — отдельный зонд в свежей JVM, критерий сознательно строже ddmin: ≥4 из 5 (80% против 67%). */
@@ -117,6 +125,16 @@ fun diagnose(
     repeat: Int = 3,
     threshold: Int = 2,
 ): Diagnosis {
+    // display-name жертвы (параметризованный тест) — до любых зондов: повтор
+    // отдельного invocation в свежей JVM невозможен, зондить такое — мусор.
+    if (victim.method.contains('(') || victim.method.contains('[')) {
+        return Diagnosis.Unsupported(
+            victim,
+            "${victim.method} не адресуется напрямую, fallback не сработал: " +
+                "параметризованный тест нельзя повторить поштучно в свежей JVM",
+        )
+    }
+
     when (val s0 = step0(harness, victim, repeat)) {
         is Step0Result.NotIsolated -> return Diagnosis.NotIsolated(victim, s0.victimUnstableInIsolation)
         is Step0Result.InfraBroken -> return Diagnosis.InfraBroken(s0.cause)

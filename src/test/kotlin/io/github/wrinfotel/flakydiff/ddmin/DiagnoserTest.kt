@@ -3,6 +3,7 @@ package io.github.wrinfotel.flakydiff.ddmin
 import io.github.wrinfotel.flakydiff.reader.TestRef
 import io.github.wrinfotel.flakydiff.replay.ReplayResult
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -189,5 +190,22 @@ class DiagnoseTest {
         val result = diagnose(h, victim, prefixWith(polluter))
 
         assertEquals(io.github.wrinfotel.flakydiff.ddmin.Diagnosis.InfraBroken("probe timeout"), result)
+    }
+
+    @Test
+    fun `parameterized victim - UNSUPPORTED before any probe`() {
+        // display-name invocation из recorded XML (параметризованный тест):
+        // v1 не умеет повторять отдельный invocation — честный отказ ДО зондов
+        val paramVictim = TestRef("com.example.ParamTest", "check(int)[1]")
+        val h = FakeHarness { _, _, _ -> error("probe must not run for UNSUPPORTED") }
+
+        val d = diagnose(h, paramVictim, listOf(TestRef("com.example.PolluterTest", "p")))
+
+        assertTrue(d is Diagnosis.Unsupported, "got: $d")
+        d as Diagnosis.Unsupported
+        assertEquals(paramVictim, d.victim)
+        assertTrue(d.reason.contains("check(int)[1]"), "имя теста в диагностике: ${d.reason}")
+        assertTrue(d.reason.contains("не адресуется напрямую"), "reason: ${d.reason}")
+        assertTrue(h.calls.isEmpty(), "ни одного зонда до вердикта: ${h.calls}")
     }
 }
