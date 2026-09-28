@@ -70,7 +70,7 @@ class Step1Test {
             if (p == prefix) ReplayResult.Reproduced(rep, rep, io.github.wrinfotel.flakydiff.reader.TestFailure("java.lang.AssertionError", "boom", null))
             else ReplayResult.NotReproduced(rep, rep)
         }
-        assertEquals(Step1Result.ReproducedWithFullPrefix, step1(h, prefix, victim))
+        assertEquals(Step1Result.ReproducedWithFullPrefix(failures = 3, attempts = 3), step1(h, prefix, victim))
         // зонд шага 1 — именно полный prefix + жертва
         assertEquals(prefix, h.calls.single().prefix)
         assertEquals(3, h.calls.single().repeat)
@@ -131,7 +131,9 @@ class DiagnoseTest {
 
         assertEquals(
             io.github.wrinfotel.flakydiff.ddmin.Diagnosis.OrderDependency(
-                victim, listOf(polluter), failure, confirmationFailures = 5, confirmationAttempts = 5,
+                victim, listOf(polluter), failure,
+                reproducedFailures = 3, reproducedAttempts = 3,
+                confirmationFailures = 5, confirmationAttempts = 5,
             ),
             result,
         )
@@ -146,7 +148,9 @@ class DiagnoseTest {
 
         assertEquals(
             io.github.wrinfotel.flakydiff.ddmin.Diagnosis.OrderDependency(
-                victim, listOf(polluter), failure, confirmationFailures = 4, confirmationAttempts = 5,
+                victim, listOf(polluter), failure,
+                reproducedFailures = 3, reproducedAttempts = 3,
+                confirmationFailures = 4, confirmationAttempts = 5,
             ),
             result,
         )
@@ -161,7 +165,9 @@ class DiagnoseTest {
 
         assertEquals(
             io.github.wrinfotel.flakydiff.ddmin.Diagnosis.Unconfirmed(
-                victim, listOf(polluter), confirmationFailures = 3, confirmationAttempts = 5,
+                victim, listOf(polluter),
+                reproducedFailures = 3, reproducedAttempts = 3,
+                confirmationFailures = 3, confirmationAttempts = 5,
             ),
             result,
         )
@@ -176,7 +182,9 @@ class DiagnoseTest {
 
         assertEquals(
             io.github.wrinfotel.flakydiff.ddmin.Diagnosis.Unconfirmed(
-                victim, listOf(polluter), confirmationFailures = 0, confirmationAttempts = 5,
+                victim, listOf(polluter),
+                reproducedFailures = 3, reproducedAttempts = 3,
+                confirmationFailures = 0, confirmationAttempts = 5,
             ),
             result,
         )

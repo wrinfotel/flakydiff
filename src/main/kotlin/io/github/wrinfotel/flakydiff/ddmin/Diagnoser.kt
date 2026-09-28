@@ -40,8 +40,11 @@ fun step0(harness: ReplayHarness, victim: TestRef, repeat: Int = 3): Step0Result
 
 /** Результат шага 1 (спека §4.3): полный prefix + жертва обязан падать. */
 sealed interface Step1Result {
-    /** Полный prefix воспроизводит падение — идём в ddmin. */
-    data object ReproducedWithFullPrefix : Step1Result
+    /**
+     * Полный prefix воспроизводит падение — идём в ddmin. [failures]/[attempts] —
+     * честный rate зонда; уходит в вердикт (reproducedRate, evidence «после polluter»).
+     */
+    data class ReproducedWithFullPrefix(val failures: Int, val attempts: Int) : Step1Result
 
     /** Полный prefix НЕ воспроизводит (включая слабый сигнал) — вероятны race/время, вне v1. */
     data class NotReproduced(val passes: Int, val attempts: Int) : Step1Result
@@ -57,7 +60,14 @@ sealed interface Step1Result {
 fun step1(harness: ReplayHarness, prefix: List<TestRef>, victim: TestRef, repeat: Int = 3): Step1Result {
     val result = harness.replay(prefix, victim, repeat)
     return when (val outcome = classify(result)) {
-        ProbeOutcome.FAILS -> Step1Result.ReproducedWithFullPrefix
+        ProbeOutcome.FAILS -> {
+            val (failures, attempts) = when (result) {
+                is ReplayResult.Reproduced -> result.failures to result.attempts
+                is ReplayResult.NotReproduced -> (result.attempts - result.passes) to result.attempts
+                is ReplayResult.InfraError -> error("unreachable: INFRA handled below")
+            }
+            Step1Result.ReproducedWithFullPrefix(failures, attempts)
+        }
         ProbeOutcome.PASSES, ProbeOutcome.WEAK -> {
             val (passes, attempts) = when (result) {
                 is ReplayResult.NotReproduced -> result.passes to result.attempts
@@ -80,6 +90,9 @@ sealed interface Diagnosis {
         val victim: TestRef,
         val polluters: List<TestRef>,
         val lastFailure: TestFailure?,
+        /** Rate шага 1 (полный prefix) — для вердикта (reproducedRate, evidence). */
+        val reproducedFailures: Int,
+        val reproducedAttempts: Int,
         val confirmationFailures: Int,
         val confirmationAttempts: Int,
     ) : Diagnosis
@@ -88,6 +101,9 @@ sealed interface Diagnosis {
     data class Unconfirmed(
         val victim: TestRef,
         val polluters: List<TestRef>,
+        /** Rate шага 1 (полный prefix) — для вердикта (reproducedRate, evidence). */
+        val reproducedFailures: Int,
+        val reproducedAttempts: Int,
         val confirmationFailures: Int,
         val confirmationAttempts: Int,
     ) : Diagnosis
@@ -141,10 +157,10 @@ fun diagnose(
         Step0Result.Isolated -> {}
     }
 
-    when (val s1 = step1(harness, prefix, victim, repeat)) {
-        is Step1Result.NotReproduced -> return Diagnosis.NotReproduced(victim, s1.passes, s1.attempts)
-        is Step1Result.InfraBroken -> return Diagnosis.InfraBroken(s1.cause)
-        Step1Result.ReproducedWithFullPrefix -> {}
+    val s1 = when (val r = step1(harness, prefix, victim, repeat)) {
+        is Step1Result.NotReproduced -> return Diagnosis.NotReproduced(victim, r.passes, r.attempts)
+        is Step1Result.InfraBroken -> return Diagnosis.InfraBroken(r.cause)
+        is Step1Result.ReproducedWithFullPrefix -> r
     }
 
     val minimal = when (val d = ddmin(harness, prefix, victim, repeat, threshold)) {
@@ -160,8 +176,11 @@ fun diagnose(
         is ReplayResult.InfraError -> return Diagnosis.InfraBroken(confirmation.cause)
     }
     return if (failures >= CONFIRM_MIN_FAILURES) {
-        Diagnosis.OrderDependency(victim, minimal.polluters, minimal.lastFailure, failures, CONFIRM_REPEAT)
+        Diagnosis.OrderDependency(
+            victim, minimal.polluters, minimal.lastFailure,
+            s1.failures, s1.attempts, failures, CONFIRM_REPEAT,
+        )
     } else {
-        Diagnosis.Unconfirmed(victim, minimal.polluters, failures, CONFIRM_REPEAT)
+        Diagnosis.Unconfirmed(victim, minimal.polluters, s1.failures, s1.attempts, failures, CONFIRM_REPEAT)
     }
 }
