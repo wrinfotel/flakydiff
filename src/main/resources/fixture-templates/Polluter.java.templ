@@ -6,7 +6,11 @@ import org.junit.jupiter.api.Test;
 public class {{NAME}} {
 
     @Test
-    void pollutes() {
+    void pollutes() throws InterruptedException {
+        // Не меньше ~50 мс: reader восстанавливает порядок классов по mtime − сумма
+        // длительностей теста; у слишком быстрого polluter'а оценка старта сливается
+        // с соседним классом и джиттер записи XML инвертирует смежный порядок.
+        Thread.sleep(100);
         PollutionState.pollute("{{KEY}}");
     }
 }
