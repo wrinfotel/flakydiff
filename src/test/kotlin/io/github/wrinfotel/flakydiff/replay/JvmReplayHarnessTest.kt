@@ -72,6 +72,18 @@ class JvmReplayHarnessTest {
     }
 
     @Test
+    fun `buildCommand - class-level prefix ref renders fqcn without hash`() {
+        // repro-команда вердикта (Task 5.1) допускает polluter-записи БЕЗ #method
+        // (replay запускает весь класс): «FQCN#» ломало бы команду зонда.
+        val cmd = harness().buildCommand(
+            listOf(TestRef("com.example.PolluterTest", "")),
+            statefulVictim, 3, Path.of("report.json"),
+        )
+        val i = cmd.indexOf("--prefix")
+        assertEquals("com.example.PolluterTest", cmd[i + 1])
+    }
+
+    @Test
     fun `b clean prefix does not reproduce`() {
         val result = harness().replay(emptyList(), statefulVictim)
 

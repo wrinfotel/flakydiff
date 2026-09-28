@@ -142,9 +142,10 @@ class JvmReplayHarness(
         cmd.add(cp)
         cmd.add("io.github.wrinfotel.flakydiff.replay.ReplayMain")
         cmd.add("--prefix")
+        // Ссылка без метода = весь класс (форма repro-команды вердикта, контракт Task 2.1)
         cmd.add(
             prefix.joinToString(",") { ref ->
-                if (ref.method == null) ref.testClass else "${ref.testClass}#${ref.method}"
+                if (ref.method.isEmpty()) ref.testClass else "${ref.testClass}#${ref.method}"
             },
         )
         cmd.add("--victim")
