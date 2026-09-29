@@ -53,9 +53,10 @@ class ReplayMainTest {
             kotlin.Unit::class.java,      // kotlin-stdlib
         ).map(::entryOf).distinct().joinToString(File.pathSeparator)
 
-    private fun runReplay(report: Path, vararg args: String): Pair<Process, String> {
-        val cmd = mutableListOf(
-            javaExe(),
+    private fun runReplay(report: Path, vararg args: String, jvmArgs: List<String> = emptyList()): Pair<Process, String> {
+        val cmd = mutableListOf(javaExe())
+        cmd += jvmArgs
+        cmd += listOf(
             "-cp",
             childClasspath(),
             "io.github.wrinfotel.flakydiff.replay.ReplayMain",
@@ -293,5 +294,34 @@ class ReplayMainTest {
             (row["failureMessage"]?.jsonPrimitive?.content ?: "").contains("not addressable"),
             "диагностика с причиной: ${report.readText()}",
         )
+    }
+
+    @Test
+    fun `recorded prefix order wins over engine class reordering`() {
+        // ClassOrderer.ClassName сортирует классы алфавитно (Cleaner < Polluter) —
+        // обратный к записанному порядок. Зонд обязан исполнить Polluter, затем
+        // Cleaner: иначе cleaner не снимет загрязнение и жертва упадёт.
+        val report = tmp.resolve("report.json")
+        val (proc, output) = runReplay(
+            report,
+            "--prefix", "io.github.wrinfotel.flakydiff.replay.FakeOrderPolluter," +
+                "io.github.wrinfotel.flakydiff.replay.FakeOrderCleaner",
+            "--victim", "io.github.wrinfotel.flakydiff.replay.FakeStatefulVictim#failsWhenDirty",
+            jvmArgs = listOf("-Djunit.jupiter.testclass.order.default=org.junit.jupiter.api.ClassOrderer\$ClassName"),
+        )
+        assertEquals(0, proc.exitValue(), "output:\n$output")
+
+        val entries = readEntries(report)
+        val victimRows = entries.filter {
+            it["class"]?.jsonPrimitive?.content == "io.github.wrinfotel.flakydiff.replay.FakeStatefulVictim"
+        }
+        assertEquals(3, victimRows.size, "report:\n${report.readText()}")
+        victimRows.forEach {
+            assertEquals(
+                "PASSED",
+                it["status"]?.jsonPrimitive?.content,
+                "порядок записанного prefix нарушен — cleaner обязан был исполниться последним:\n${report.readText()}",
+            )
+        }
     }
 }

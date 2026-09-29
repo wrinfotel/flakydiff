@@ -49,25 +49,34 @@ object ReplayMain {
 
         try {
             if (opts.prefix.isNotEmpty()) {
+                // Порядок prefix — семантика проверки (спека §4.2): каждый класс
+                // записанного порядка исполняется СВОИМ discovery-запросом, подряд
+                // идущие ссылки одного класса сворачиваются в один запрос. Один
+                // общий запрос отдавал бы порядок на откуп движку: ClassOrderer
+                // проекта (Random/ClassName) переставил бы классы относительно
+                // записанного прогона.
+                //
                 // Отбор по классу + postDiscoveryFilter префиксом имени (план
                 // Task 4.3): display-name ссылка параметризованного теста
                 // (check(int)[2]) адресуется классом + фильтром листьев по префиксу
                 // имени — типы параметров из display-name не парсим, движок прогоняет
                 // все invocations. Голый selectMethod по имени не подходит: он ищет
                 // no-arg метод и не находит параметризованный.
-                val prefixRequest = LauncherDiscoveryRequestBuilder.request()
-                    .selectors(opts.prefix.map { DiscoverySelectors.selectClass(it.cls) }.distinct())
-                    .filters(
-                        PostDiscoveryFilter { descriptor ->
-                            if (opts.prefix.any { leafMatches(it, descriptor) }) {
-                                FilterResult.included(null)
-                            } else {
-                                FilterResult.excluded(null)
-                            }
-                        },
-                    )
-                    .build()
-                launcher.execute(prefixRequest, listener)
+                for ((cls, refs) in groupConsecutiveByClass(opts.prefix)) {
+                    val groupRequest = LauncherDiscoveryRequestBuilder.request()
+                        .selectors(DiscoverySelectors.selectClass(cls))
+                        .filters(
+                            PostDiscoveryFilter { descriptor ->
+                                if (refs.any { leafMatches(it, descriptor) }) {
+                                    FilterResult.included(null)
+                                } else {
+                                    FilterResult.excluded(null)
+                                }
+                            },
+                        )
+                        .build()
+                    launcher.execute(groupRequest, listener)
+                }
 
                 // Честность (план Task 4.3): каждая prefix-ссылка обязана быть
                 // адресованной — строкой отчёта (метод) или исполненным контейнером
@@ -129,6 +138,24 @@ object ReplayMain {
 
     private fun request(selectors: List<org.junit.platform.engine.DiscoverySelector>): LauncherDiscoveryRequest =
         LauncherDiscoveryRequestBuilder.request().selectors(selectors).build()
+
+    /**
+     * Подряд идущие ссылки одного класса — одна группа (один discovery-запрос);
+     * порядок групп = записанный порядок классов. Порядок методов внутри класса —
+     * порядок движка, как и в записанном Jupiter-прогоне.
+     */
+    private fun groupConsecutiveByClass(prefix: List<PrefixRef>): List<Pair<String, List<PrefixRef>>> {
+        val groups = mutableListOf<Pair<String, MutableList<PrefixRef>>>()
+        for (ref in prefix) {
+            val last = groups.lastOrNull()
+            if (last != null && last.first == ref.cls) {
+                last.second.add(ref)
+            } else {
+                groups.add(ref.cls to mutableListOf(ref))
+            }
+        }
+        return groups
+    }
 
     /**
      * display-name invocation (содержит '(' или '[') адресуется по базовому

@@ -34,3 +34,23 @@ class FakeHangingVictim {
         Thread.sleep(8_000)
     }
 }
+
+/**
+ * Порядочно-чувствительная пара (ревью v1, Important): cleaner обязан исполняться
+ * ПОСЛЕ polluter'а в записанном порядке — иначе не снимет загрязнение. Имена
+ * подобраны под ClassOrderer.ClassName: алфавитный порядок (Cleaner < Polluter)
+ * обратен порядку записи — тест порядка prefix форсирует коллизию осознанно.
+ */
+class FakeOrderCleaner {
+    @Test
+    fun clean() {
+        SharedProbeState.dirty = false
+    }
+}
+
+class FakeOrderPolluter {
+    @Test
+    fun pollute() {
+        SharedProbeState.dirty = true
+    }
+}
