@@ -214,7 +214,7 @@ open class DiagnoseCommand : Callable<Int> {
      * JvmReplayHarness с таймаутами из длительностей XML.
      */
     protected open fun buildHarness(durationsMs: Map<TestRef, Long>): ReplayHarness {
-        val info = prepareProject(project, project.resolve("target/flakydiff-cache"))
+        val info = prepareProject(absProject(), absProject().resolve("target/flakydiff-cache"))
         info.warnings.forEach { spec.commandLine().err.println("warning: $it") }
         return JvmReplayHarness(
             project = info,
@@ -225,8 +225,15 @@ open class DiagnoseCommand : Callable<Int> {
         )
     }
 
+    /**
+     * --project обязан быть абсолютным ДО prepareProject: mvn пишет classpath-файл
+     * (-Dmdep.outputFile) относительно СВОЕЙ cwd (= директории проекта), а код
+     * ищет его по исходному пути — относительный путь давал бы несовпадение.
+     */
+    private fun absProject(): Path = project.toAbsolutePath().normalize()
+
     private fun verdictContext(read: ReadResult, victimRef: TestRef): VerdictContext = VerdictContext(
-        projectDir = project.toAbsolutePath().normalize().toString(),
+        projectDir = absProject().toString(),
         repeat = DEFAULT_REPEAT,
         orderUnreliable = read.orderUnreliable,
         orderUnreliableReason = when {
@@ -283,7 +290,8 @@ open class ReplayCommand : Callable<Int> {
     var repeat: Int = 3
 
     protected open fun buildHarness(): ReplayHarness {
-        val info = prepareProject(project, project.resolve("target/flakydiff-cache"))
+        val dir = project.toAbsolutePath().normalize()
+        val info = prepareProject(dir, dir.resolve("target/flakydiff-cache"))
         info.warnings.forEach { spec.commandLine().err.println("warning: $it") }
         return JvmReplayHarness(info, probeClasspath())
     }
