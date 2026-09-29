@@ -191,6 +191,39 @@ class FlakydiffCliTest {
         assertEquals(2, cli.execute("replay"))
     }
 
+    @Test
+    fun `diagnose - reports dir missing - honest usage error, no stack trace`() {
+        val cli = CapturedCli(FakeDiagnoseCommand(odHarness(TestRef("com.example.VictimTest", "flaky"))))
+
+        val code = cli.execute(
+            "diagnose", "--project", tmp.toString(), "--reports", tmp.resolve("nope").toString(),
+            "--victim", "com.example.VictimTest#flaky",
+        )
+
+        assertEquals(2, code)
+        assertTrue(
+            cli.stderr.toString("UTF-8").contains("reports directory not found"),
+            cli.stderr.toString("UTF-8"),
+        )
+    }
+
+    @Test
+    @org.junit.jupiter.api.Tag("integration")
+    fun `replay - project without pom - honest error exit 2`() {
+        val cli = CapturedCli()
+
+        val code = cli.execute(
+            "replay", "--project", tmp.toString(),
+            "--victim", "com.example.VictimTest#flaky",
+        )
+
+        assertEquals(2, code)
+        assertTrue(
+            cli.stderr.toString("UTF-8").contains("replay failed"),
+            cli.stderr.toString("UTF-8"),
+        )
+    }
+
     private fun verdictFile(): Path {
         val victim = TestRef("com.example.VictimTest", "flaky")
         val v = buildVerdict(

@@ -156,6 +156,10 @@ open class DiagnoseCommand : Callable<Int> {
             return 2
         }
 
+        if (!Files.isDirectory(reports)) {
+            spec.commandLine().err.println("reports directory not found: $reports")
+            return 2
+        }
         val read = readReports(reports, ReadOptions(sequential = if (sequential) true else null, noForks = noForks))
         read.errors.forEach {
             spec.commandLine().err.println("reader: ${it.message}${it.cause?.let { c -> ": $c" } ?: ""}")
@@ -305,21 +309,28 @@ open class ReplayCommand : Callable<Int> {
             val idx = line.indexOf('#')
             if (idx <= 0) TestRef(line, "") else TestRef(line.substring(0, idx), line.substring(idx + 1))
         }
-        return when (val r = buildHarness().replay(prefixRefs, victimRef, repeat)) {
-            is ReplayResult.Reproduced -> {
-                spec.commandLine().out.println("REPRODUCED ${r.failures}/${r.attempts}")
-                r.failure.type?.let { spec.commandLine().out.println("failure: $it") }
-                r.failure.message?.let { spec.commandLine().out.println("message: $it") }
-                0
+        // Любая неудача подготовки/зонда — честная строка в stderr и код 2
+        // (инфра/ошибка по контракту команды), не сырой stack trace.
+        return try {
+            when (val r = buildHarness().replay(prefixRefs, victimRef, repeat)) {
+                is ReplayResult.Reproduced -> {
+                    spec.commandLine().out.println("REPRODUCED ${r.failures}/${r.attempts}")
+                    r.failure.type?.let { spec.commandLine().out.println("failure: $it") }
+                    r.failure.message?.let { spec.commandLine().out.println("message: $it") }
+                    0
+                }
+                is ReplayResult.NotReproduced -> {
+                    spec.commandLine().out.println("NOT-REPRODUCED ${r.passes}/${r.attempts} pass")
+                    1
+                }
+                is ReplayResult.InfraError -> {
+                    spec.commandLine().err.println("INFRA-ERROR: ${r.cause}")
+                    2
+                }
             }
-            is ReplayResult.NotReproduced -> {
-                spec.commandLine().out.println("NOT-REPRODUCED ${r.passes}/${r.attempts} pass")
-                1
-            }
-            is ReplayResult.InfraError -> {
-                spec.commandLine().err.println("INFRA-ERROR: ${r.cause}")
-                2
-            }
+        } catch (t: Throwable) {
+            spec.commandLine().err.println("replay failed: ${t.javaClass.simpleName}: ${t.message}")
+            2
         }
     }
 }
