@@ -9,6 +9,8 @@ import io.github.wrinfotel.flakydiff.reader.readReports
 import io.github.wrinfotel.flakydiff.replay.JvmReplayHarness
 import io.github.wrinfotel.flakydiff.replay.ReplayHarness
 import io.github.wrinfotel.flakydiff.replay.ReplayResult
+import io.github.wrinfotel.flakydiff.replay.VICTIM_TIMEOUT_FLOOR_SEC
+import io.github.wrinfotel.flakydiff.replay.effectiveVictimTimeoutSec
 import io.github.wrinfotel.flakydiff.replay.prepareProject
 import io.github.wrinfotel.flakydiff.verdict.VerdictContext
 import io.github.wrinfotel.flakydiff.verdict.buildVerdict
@@ -198,7 +200,7 @@ open class DiagnoseCommand : Callable<Int> {
         val verdict = try {
             val harness = buildHarness(durations)
             val d = diagnose(harness, victimRef, prefix, repeat = DEFAULT_REPEAT, threshold = minFailRatio)
-            buildVerdict(d, verdictContext(read, victimRef))
+            buildVerdict(d, verdictContext(read, victimRef, durations))
         } catch (t: Throwable) {
             spec.commandLine().err.println("diagnose failed: ${t.javaClass.simpleName}: ${t.message}")
             return 1
@@ -236,19 +238,25 @@ open class DiagnoseCommand : Callable<Int> {
      */
     private fun absProject(): Path = project.toAbsolutePath().normalize()
 
-    private fun verdictContext(read: ReadResult, victimRef: TestRef): VerdictContext = VerdictContext(
-        projectDir = absProject().toString(),
-        repeat = DEFAULT_REPEAT,
-        orderUnreliable = read.orderUnreliable,
-        orderUnreliableReason = when {
-            !read.orderUnreliable -> null
-            read.orderSource == OrderSource.MTIME_HEURISTIC ->
-                "порядок восстановлен по mtime файлов (точных timestamp нет)"
-            else -> "порядок из XML не подтверждён (--sequential не дал достоверности)"
-        },
-        forksPossible = read.forksPossible,
-        markedFlakyInRun = victimRef in read.run.markedFlaky,
-    )
+    private fun verdictContext(read: ReadResult, victimRef: TestRef, durations: Map<TestRef, Long>): VerdictContext {
+        // Фактическая рамка диагностики выше пола 30s → repro обязан нести её с собой:
+        // replay без XML-длительностей взял бы пол и убил повторы медленной жертвы.
+        val vtSec = effectiveVictimTimeoutSec(durations[victimRef], victimTimeoutSec)
+        return VerdictContext(
+            projectDir = absProject().toString(),
+            repeat = DEFAULT_REPEAT,
+            orderUnreliable = read.orderUnreliable,
+            orderUnreliableReason = when {
+                !read.orderUnreliable -> null
+                read.orderSource == OrderSource.MTIME_HEURISTIC ->
+                    "порядок восстановлен по mtime файлов (точных timestamp нет)"
+                else -> "порядок из XML не подтверждён (--sequential не дал достоверности)"
+            },
+            forksPossible = read.forksPossible,
+            markedFlakyInRun = victimRef in read.run.markedFlaky,
+            reproVictimTimeoutSec = vtSec.takeIf { it > VICTIM_TIMEOUT_FLOOR_SEC },
+        )
+    }
 
     private fun readPrefixFile(f: Path): List<TestRef>? {
         if (!Files.exists(f)) {
@@ -293,11 +301,25 @@ open class ReplayCommand : Callable<Int> {
     @Option(names = ["--repeat"], defaultValue = "3", description = ["Повторов жертвы (дефолт 3)."])
     var repeat: Int = 3
 
+    @Option(
+        names = ["--victim-timeout"],
+        description = ["Таймаут повтора жертвы, сек (без XML-длительностей дефолт — пол ${VICTIM_TIMEOUT_FLOOR_SEC}s)."],
+    )
+    var victimTimeoutSec: Long? = null
+
+    @Option(names = ["--probe-timeout"], description = ["Рамка на весь процесс зонда, сек (kill по истечении)."])
+    var probeTimeoutSec: Long? = null
+
     protected open fun buildHarness(): ReplayHarness {
         val dir = project.toAbsolutePath().normalize()
         val info = prepareProject(dir, dir.resolve("target/flakydiff-cache"))
         info.warnings.forEach { spec.commandLine().err.println("warning: $it") }
-        return JvmReplayHarness(info, probeClasspath())
+        return JvmReplayHarness(
+            info,
+            probeClasspath(),
+            victimTimeoutMs = victimTimeoutSec?.times(1000),
+            probeTimeoutMs = probeTimeoutSec?.times(1000),
+        )
     }
 
     override fun call(): Int {

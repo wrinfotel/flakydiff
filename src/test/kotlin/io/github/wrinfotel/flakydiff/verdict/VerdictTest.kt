@@ -71,6 +71,28 @@ class VerdictTest {
     }
 
     @Test
+    fun `repro command carries victim timeout above the 30s floor`() {
+        // replay без XML не знает длительности жертвы: его дефолт — пол clamp'а 30s,
+        // который убил бы повторы медленной жертвы. Вердикт отдаёт фактическую рамку
+        // диагностики в repro-команду (ревью v1, Important).
+        val d = Diagnosis.OrderDependency(
+            victim, listOf(polluter), failure,
+            reproducedFailures = 3, reproducedAttempts = 3,
+            confirmationFailures = 5, confirmationAttempts = 5,
+        )
+
+        val v = buildVerdict(d, ctx().copy(reproVictimTimeoutSec = 50))
+
+        assertEquals(
+            "flakydiff replay --project path/to/project " +
+                "--prefix com.example.PolluterTest " +
+                "--victim com.example.VictimTest#flaky " +
+                "--victim-timeout 50",
+            v.reproCommand,
+        )
+    }
+
+    @Test
     fun `order dependency - two polluters joined by comma, fqcn only`() {
         val p1 = TestRef("com.example.PolluterOneTest", "poisonOne")
         val p2 = TestRef("com.example.PolluterTwoTest", "poisonTwo")

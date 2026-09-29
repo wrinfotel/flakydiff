@@ -173,17 +173,13 @@ class JvmReplayHarness(
         }
 
     private fun victimTimeoutSec(victim: TestRef): Long =
-        ((victimTimeoutMs ?: clamp(durationsMs[victim] ?: 0L)) + 999) / 1000
+        ((victimTimeoutMs ?: clampVictimTimeoutMs(durationsMs[victim] ?: 0L)) + 999) / 1000
 
     private fun defaultProbeTimeoutMs(prefix: List<TestRef>, victim: TestRef, repeat: Int): Long {
         val prefixSum = prefix.sumOf { durationsMs[it] ?: 0L }
-        val vt = victimTimeoutMs ?: clamp(durationsMs[victim] ?: 0L)
+        val vt = victimTimeoutMs ?: clampVictimTimeoutMs(durationsMs[victim] ?: 0L)
         return (prefixSum * 2 + vt * repeat + 60_000).coerceAtMost(900_000)
     }
-
-    /** clamp(duration×5, 30s, 180s) — честная рамка, без псевдостатистики. */
-    private fun clamp(durationMs: Long): Long =
-        (durationMs * 5).coerceIn(30_000, 180_000)
 
     private fun javaExecutable(): String {
         val exe = if (System.getProperty("os.name").lowercase().contains("win")) "java.exe" else "java"
@@ -206,6 +202,17 @@ class JvmReplayHarness(
         }
     }
 }
+
+/** Пол clamp-рамки повтора жертвы; он же дефолт replay без XML-длительностей. */
+internal const val VICTIM_TIMEOUT_FLOOR_SEC = 30L
+
+/** clamp(duration×5, 30s, 180s) — честная рамка, без псевдостатистики (спека §4.2). */
+internal fun clampVictimTimeoutMs(durationMs: Long): Long =
+    (durationMs * 5).coerceIn(VICTIM_TIMEOUT_FLOOR_SEC * 1_000, 180_000)
+
+/** Итоговая рамка повтора жертвы в секундах: явный override важнее clamp'а длительности. */
+internal fun effectiveVictimTimeoutSec(durationMs: Long?, overrideSec: Long?): Long =
+    ((overrideSec?.times(1_000) ?: clampVictimTimeoutMs(durationMs ?: 0L)) + 999) / 1_000
 
 /**
  * argLine — строка аргументов JVM, а не shell-команда: ProcessBuilder передаёт токены

@@ -72,13 +72,21 @@ class FlakydiffCliTest {
     }
 
     /** XML с точными suite-timestamp (урок case09: без них порядок — джиттер mtime). */
-    private fun writeReport(dir: Path, name: String, cls: String, method: String, failed: Boolean, ts: String) {
+    private fun writeReport(
+        dir: Path,
+        name: String,
+        cls: String,
+        method: String,
+        failed: Boolean,
+        ts: String,
+        duration: String = "0.1",
+    ) {
         Files.createDirectories(dir)
         val failure = if (failed) "\n  <failure message=\"not clean\" type=\"org.opentest4j.AssertionFailedError\"/>" else ""
         Files.writeString(
             dir.resolve(name),
-            """<testsuite name="$cls" time="0.1" tests="1" timestamp="$ts">
-  <testcase name="$method" classname="$cls" time="0.1"/>$failure
+            """<testsuite name="$cls" time="$duration" tests="1" timestamp="$ts">
+  <testcase name="$method" classname="$cls" time="$duration"/>$failure
 </testsuite>""",
         )
     }
@@ -190,6 +198,36 @@ class FlakydiffCliTest {
         val cli = CapturedCli()
 
         assertEquals(2, cli.execute("replay"))
+    }
+
+    @Test
+    fun `replay - help mentions timeout options`() {
+        // replay — ручное воспроизведение: рамки зонда обязаны настраиваться и здесь,
+        // иначе repro медленной жертвы умирает на дефолтных 30s (ревью v1, Important)
+        val cli = CapturedCli()
+
+        val code = cli.execute("replay", "--help")
+
+        assertEquals(0, code)
+        val text = cli.stdout.toString("UTF-8")
+        assertTrue(text.contains("--victim-timeout"), text)
+        assertTrue(text.contains("--probe-timeout"), text)
+    }
+
+    @Test
+    fun `diagnose - repro command carries victim timeout above floor`() {
+        // жертва 10s в XML → clamp(10s×5) = 50s > пола 30s: repro обязан нести рамку,
+        // иначе `flakydiff replay` по команде из вердикта убьёт повторы на 30s
+        val dir = tmp.resolve("reports-slow")
+        writeReport(dir, "TEST-p.xml", "com.example.PolluterTest", "poison", false, "2026-01-01T00:00:01Z", duration = "10.0")
+        writeReport(dir, "TEST-v.xml", "com.example.VictimTest", "flaky", true, "2026-01-01T00:00:11Z", duration = "10.0")
+        val cli = CapturedCli(FakeDiagnoseCommand(odHarness(TestRef("com.example.VictimTest", "flaky"))))
+
+        val code = cli.execute(*diagnoseArgs(dir, "--sequential"))
+
+        assertEquals(0, code, cli.stderr.toString("UTF-8"))
+        val text = cli.stdout.toString("UTF-8")
+        assertTrue(text.contains("--victim-timeout 50"), "repro с рамкой диагностики: $text")
     }
 
     @Test

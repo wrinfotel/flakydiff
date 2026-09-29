@@ -47,6 +47,12 @@ data class VerdictContext(
     val orderUnreliableReason: String? = null,
     val forksPossible: Boolean = true,
     val markedFlakyInRun: Boolean = false,
+    /**
+     * Фактическая рамка повтора жертвы диагностики, когда она выше дефолтного
+     * пола replay (30s): без неё repro-команда убьёт повторы медленной жертвы
+     * (replay без XML не знает длительностей). null — рамка дефолтная, флаг не нужен.
+     */
+    val reproVictimTimeoutSec: Long? = null,
 )
 
 /**
@@ -67,7 +73,7 @@ fun buildVerdict(diagnosis: Diagnosis, ctx: VerdictContext): DiagnoseVerdict = w
         forksPossible = ctx.forksPossible,
         markedFlakyInRun = ctx.markedFlakyInRun,
         victimUnstableInIsolation = false,
-        reproCommand = reproCommand(diagnosis.polluters, diagnosis.victim, ctx.projectDir),
+        reproCommand = reproCommand(diagnosis.polluters, diagnosis.victim, ctx.projectDir, ctx.reproVictimTimeoutSec),
         diagnostics = null,
     )
 
@@ -84,7 +90,7 @@ fun buildVerdict(diagnosis: Diagnosis, ctx: VerdictContext): DiagnoseVerdict = w
         forksPossible = ctx.forksPossible,
         markedFlakyInRun = ctx.markedFlakyInRun,
         victimUnstableInIsolation = false,
-        reproCommand = reproCommand(diagnosis.polluters, diagnosis.victim, ctx.projectDir),
+        reproCommand = reproCommand(diagnosis.polluters, diagnosis.victim, ctx.projectDir, ctx.reproVictimTimeoutSec),
         diagnostics = null,
     )
 
@@ -161,9 +167,19 @@ fun buildVerdict(diagnosis: Diagnosis, ctx: VerdictContext): DiagnoseVerdict = w
 private fun isolatedEvidence(ctx: VerdictContext): String = "изолированно ${ctx.repeat}/${ctx.repeat} pass"
 
 /** Polluter-записи — FQCN без #method (replay запускает весь класс), жертва — FQCN#method. */
-private fun reproCommand(polluters: List<TestRef>, victim: TestRef, projectDir: String): String {
+private fun reproCommand(
+    polluters: List<TestRef>,
+    victim: TestRef,
+    projectDir: String,
+    victimTimeoutSec: Long? = null,
+): String {
     check(polluters.isNotEmpty()) { "repro command needs polluters; without them it must be null" }
-    return "flakydiff replay --project $projectDir " +
-        "--prefix ${polluters.joinToString(",") { it.testClass }} " +
-        "--victim ${victim.testClass}#${victim.method}"
+    return buildString {
+        append("flakydiff replay --project ").append(projectDir)
+        append(" --prefix ").append(polluters.joinToString(",") { it.testClass })
+        append(" --victim ").append(victim.testClass).append('#').append(victim.method)
+        // Рамка диагностики выше дефолта replay — без неё repro нерабочий (Important
+        // ревью v1): replay без XML дефолтит пол 30s и убивает повторы медленной жертвы.
+        victimTimeoutSec?.let { append(" --victim-timeout ").append(it) }
+    }
 }
