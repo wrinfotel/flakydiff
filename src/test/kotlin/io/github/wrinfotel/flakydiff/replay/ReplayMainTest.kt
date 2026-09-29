@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.engine.JupiterTestEngine
@@ -25,7 +26,9 @@ import kotlin.io.path.readText
  * проекта ПЕРВЫМ (target/test-classes, target/classes), сторонние jars после —
  * правило classpath из шапки плана. Состав classpath собирается по codeSource
  * загруженных классов — надёжно и под surefire (manifest-only booter jar).
+ * Integration: каждый тест порождает реальные JVM-зонды (правило Task 4.1 плана).
  */
+@Tag("integration")
 class ReplayMainTest {
 
     @TempDir

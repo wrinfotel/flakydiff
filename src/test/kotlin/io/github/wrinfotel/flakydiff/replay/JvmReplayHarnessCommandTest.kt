@@ -122,4 +122,42 @@ class JvmReplayHarnessCommandTest {
         )
         assertEquals(emptyMap<String, String>(), harness().probeEnvironment())
     }
+
+    @Test
+    fun `buildCommand - class-level prefix ref renders fqcn without hash`() {
+        // repro-команда вердикта (Task 5.1) допускает polluter-записи БЕЗ #method
+        // (replay запускает весь класс): «FQCN#» ломало бы команду зонда.
+        val cmd = harness().buildCommand(
+            listOf(TestRef("com.example.PolluterTest", "")),
+            statefulVictim, 3, Path.of("report.json"),
+        )
+        val i = cmd.indexOf("--prefix")
+        assertEquals("com.example.PolluterTest", cmd[i + 1])
+    }
+
+    @Test
+    fun `command puts project classpath first and probe cp last`() {
+        // блокирующее правило спеки §4.2: classpath проекта ПЕРВЫМ, replay-jar ПОСЛЕДНИМ
+        val cmd = harness().buildCommand(listOf(polluter), statefulVictim, 3, Path.of("dummy-report.json"))
+
+        val cp = cmd[cmd.indexOf("-cp") + 1]
+        val entries = cp.split(java.io.File.pathSeparator)
+        assertEquals(testClassesDir.toString(), entries.first(), "target/test-classes обязан быть первым")
+        assertEquals(classesDir.toString(), entries[1], "target/classes — вторым")
+        val probeCp = probeClasspath().map { it.toString() }
+        assertEquals(probeCp, entries.takeLast(probeCp.size), "probe-cp (в реале replay-jar) — последним")
+
+        assertEquals(
+            "io.github.wrinfotel.flakydiff.replay.FakeStatePolluter#makeDirty",
+            cmd[cmd.indexOf("--prefix") + 1],
+        )
+        assertEquals(
+            "io.github.wrinfotel.flakydiff.replay.FakeStatefulVictim#failsWhenDirty",
+            cmd[cmd.indexOf("--victim") + 1],
+        )
+        assertEquals("3", cmd[cmd.indexOf("--repeat") + 1])
+        assertEquals(Path.of("dummy-report.json").toString(), cmd[cmd.indexOf("--report") + 1])
+        // durations пусты -> clamp(x*5, 30s, 180s) даёт нижнюю границу 30s
+        assertEquals("30", cmd[cmd.indexOf("--victim-timeout") + 1])
+    }
 }
