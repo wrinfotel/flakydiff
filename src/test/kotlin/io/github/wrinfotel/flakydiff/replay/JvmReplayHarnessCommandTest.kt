@@ -35,6 +35,7 @@ class JvmReplayHarnessCommandTest {
         durationsMs: Map<TestRef, Long> = emptyMap(),
         victimTimeoutMs: Long? = null,
         argLine: String? = null,
+        profiles: List<String> = emptyList(),
     ): JvmReplayHarness {
         val project = MavenProjectInfo(
             projectDir = Path.of("").toAbsolutePath().normalize(),
@@ -44,7 +45,7 @@ class JvmReplayHarnessCommandTest {
             systemProperties = emptyMap(),
             argLine = argLine,
             systemPropertiesFile = null,
-            profiles = emptyList(),
+            profiles = profiles,
             warnings = emptyList(),
         )
         return JvmReplayHarness(
@@ -109,5 +110,16 @@ class JvmReplayHarnessCommandTest {
 
         val jvmArgs = cmd.subList(1, cmd.indexOf("-cp"))
         assertEquals(listOf("""-Dquote=a "b" c""", "-Xss2m"), jvmArgs)
+    }
+
+    @Test
+    fun `activated profiles go into probe environment`() {
+        // спека §4.2: «activated profiles → env»; эффекты профилей на pom уже
+        // интерполированы в effective-pom — это канал для тестов, читающих окружение
+        assertEquals(
+            mapOf("MAVEN_ACTIVE_PROFILES" to "ci,db"),
+            harness(profiles = listOf("ci", "db")).probeEnvironment(),
+        )
+        assertEquals(emptyMap<String, String>(), harness().probeEnvironment())
     }
 }

@@ -59,10 +59,11 @@ class JvmReplayHarness(
         val report = Files.createTempFile("flakydiff-probe-", ".json")
         try {
             val cmd = buildCommand(prefix, victim, repeat, report)
-            val proc = ProcessBuilder(cmd)
+            val procBuilder = ProcessBuilder(cmd)
                 .directory(project.projectDir.toFile())
                 .redirectErrorStream(true)
-                .start()
+            procBuilder.environment().putAll(probeEnvironment())
+            val proc = procBuilder.start()
             val output = arrayOfNulls<String>(1)
             val drain = Thread {
                 output[0] = proc.inputStream.readBytes().toString(Charsets.UTF_8)
@@ -158,6 +159,18 @@ class JvmReplayHarness(
         cmd.add(victimTimeoutSec(victim).toString())
         return cmd
     }
+
+    /**
+     * Активированные (activeByDefault) профили → env зонда (спека §4.2 «activated
+     * profiles → env»). Эффекты профилей на pom уже интерполированы в effective-pom —
+     * это канал для тестов, ветвящихся на окружение прогона.
+     */
+    internal fun probeEnvironment(): Map<String, String> =
+        if (project.profiles.isEmpty()) {
+            emptyMap()
+        } else {
+            mapOf("MAVEN_ACTIVE_PROFILES" to project.profiles.joinToString(","))
+        }
 
     private fun victimTimeoutSec(victim: TestRef): Long =
         ((victimTimeoutMs ?: clamp(durationsMs[victim] ?: 0L)) + 999) / 1000

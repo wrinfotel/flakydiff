@@ -144,4 +144,59 @@ class MavenProjectInfoTest {
         }
         assertTrue(ex.message!!.contains("boom-stderr-tail"), "message: ${ex.message}")
     }
+
+    /** Спека §4.2 (блокирующее): systemPropertiesFile обязан доходить до зондов. */
+    private fun effectivePomWithVars(): String = """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>fix</groupId><artifactId>f</artifactId><version>1</version>
+          <build><plugins><plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <systemPropertyVariables>
+                <fixtureProp>fixtureValue</fixtureProp>
+                <overridden>explicitValue</overridden>
+              </systemPropertyVariables>
+              <systemPropertiesFile>src/test/resources/test.properties</systemPropertiesFile>
+            </configuration>
+          </plugin></plugins></build>
+        </project>
+    """.trimIndent()
+
+    @Test
+    fun `systemPropertiesFile properties reach probes, explicit pom variables win`() {
+        val project = fixtureProject()
+        val props = project.resolve("src/test/resources/test.properties")
+        Files.createDirectories(props.parent)
+        Files.writeString(props, "fromFile=fileValue\noverridden=fromFileValue\n")
+        val runner = RecordingRunner(effectivePomWithVars())
+
+        val info = prepareProject(project, cacheDir(), runner)
+
+        assertEquals(
+            mapOf(
+                "fromFile" to "fileValue",
+                "fixtureProp" to "fixtureValue",
+                "overridden" to "explicitValue",
+            ),
+            info.systemProperties,
+            "файл обязан попасть в свойства зонда; явные systemPropertyVariables побеждают",
+        )
+    }
+
+    @Test
+    fun `missing systemPropertiesFile is a warning, not a crash`() {
+        val info = prepareProject(fixtureProject(), cacheDir(), RecordingRunner(effectivePomWithVars()))
+
+        assertTrue(
+            info.warnings.any { it.contains("systemPropertiesFile") },
+            "warnings: ${info.warnings}",
+        )
+        assertEquals(
+            mapOf("fixtureProp" to "fixtureValue", "overridden" to "explicitValue"),
+            info.systemProperties,
+            "явные переменные остаются",
+        )
+    }
 }

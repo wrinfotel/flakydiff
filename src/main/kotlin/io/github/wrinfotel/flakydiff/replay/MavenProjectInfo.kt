@@ -20,6 +20,7 @@ data class MavenProjectInfo(
     val classesDir: Path,
     /** Только зависимости из build-classpath; target-каталоги рядом отдельными полями. */
     val classpathEntries: List<Path>,
+    /** Итоговые свойства зонда: systemPropertiesFile + systemPropertyVariables (явные побеждают). */
     val systemProperties: Map<String, String>,
     /** argLine после второго прохода интерполяции: сырые @{...}/${...} вырезаны с warning. */
     val argLine: String?,
@@ -92,17 +93,43 @@ fun prepareProject(
 
     val cfg = parseSurefireConfig(effectiveFile)
     val (argLine, argWarnings) = stripUnresolvedPlaceholders(cfg.argLine)
+    val warnings = argWarnings.toMutableList()
+    val fileProps = loadFileProperties(projectDir, cfg.systemPropertiesFile, warnings)
     return MavenProjectInfo(
         projectDir = projectDir,
         testClassesDir = projectDir.resolve("target").resolve("test-classes"),
         classesDir = projectDir.resolve("target").resolve("classes"),
         classpathEntries = classpathEntries,
-        systemProperties = cfg.systemPropertyVariables,
+        // Итоговые свойства зонда (спека §4.2): файл + явные systemPropertyVariables,
+        // явные побеждают — так же разрешает приоритеты surefire.
+        systemProperties = fileProps + cfg.systemPropertyVariables,
         argLine = argLine,
         systemPropertiesFile = cfg.systemPropertiesFile,
         profiles = cfg.activatedProfiles,
-        warnings = argWarnings,
+        warnings = warnings,
     )
+}
+
+/**
+ * systemPropertiesFile из конфигурации surefire (спека §4.2): путь относительно
+ * basedir проекта (или абсолютный). Нет файла — warning, не крах: остальная
+ * конфигурация остаётся валидной.
+ */
+private fun loadFileProperties(
+    projectDir: Path,
+    systemPropertiesFile: String?,
+    warnings: MutableList<String>,
+): Map<String, String> {
+    if (systemPropertiesFile == null) return emptyMap()
+    val raw = Path.of(systemPropertiesFile)
+    val file = if (raw.isAbsolute) raw else projectDir.resolve(raw)
+    if (!Files.exists(file)) {
+        warnings.add("systemPropertiesFile not found: $file (surefire properties skipped)")
+        return emptyMap()
+    }
+    val props = java.util.Properties()
+    Files.newInputStream(file).use { props.load(it) }
+    return props.entries.associate { (k, v) -> k.toString() to v.toString() }
 }
 
 private val isWindows: Boolean =
