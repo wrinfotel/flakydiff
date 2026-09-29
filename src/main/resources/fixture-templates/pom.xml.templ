@@ -28,6 +28,14 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.2</version>
+        <!-- Дефолт filesystem зависит от платформы: на Linux порядок классов
+             произвольный (не алфавитный), записанный прогон переставляет классы
+             относительно T<NN>-нумерации, и e2e-кейсы с polluter-семантикой
+             становятся платформо-зависимыми (упали на CI ubuntu). alphabetical
+             делает записанный порядок детерминированным и равным алфавитному. -->
+        <configuration>
+          <runOrder>alphabetical</runOrder>
+        </configuration>
       </plugin>
     </plugins>
   </build>

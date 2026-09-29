@@ -104,7 +104,9 @@ private fun renderBody(scenario: Scenario, className: String): String = when (sc
 /**
  * Генерирует мини-Maven проект (план Task 4.1): pom + PollutionState + по классу
  * на сценарий, в чистой Java. Классы называются T<NN>_<Name>Test — записанный
- * порядок прогона (алфавитный у surefire) совпадает с порядком [scenarios].
+ * порядок прогона совпадает с порядком [scenarios]; равенство алфавитному порядку
+ * обеспечивает surefire `runOrder=alphabetical` в pom-шаблоне (дефолт filesystem
+ * платформо-зависим: на Linux порядок произвольный — упало на CI, 2026-09-29).
  */
 fun generateFixture(dir: Path, scenarios: List<Scenario>): Fixture {
     val packageDir = FIXTURE_PACKAGE.split('.').fold(sourcesRoot(dir)) { acc, part -> acc.resolve(part) }
