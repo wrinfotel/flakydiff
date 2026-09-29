@@ -128,7 +128,7 @@ open class DiagnoseCommand : Callable<Int> {
 
     @Option(
         names = ["--max-classes"],
-        description = ["Кап размера prefix: при превышении берётся первая половина записанного prefix + предупреждение."],
+        description = ["Кап размера prefix: при превышении берутся первые N записей + предупреждение."],
     )
     var maxClasses: Int? = null
 
@@ -183,12 +183,12 @@ open class DiagnoseCommand : Callable<Int> {
             val recorded = read.run.entries.takeWhile { it.ref != victimRef }.map { it.ref }
             val cap = maxClasses
             if (cap != null && recorded.size > cap) {
-                val half = recorded.take(recorded.size / 2)
+                val capped = recorded.take(cap)
                 spec.commandLine().out.println(
                     "warning: recorded prefix (${recorded.size} entries) exceeds --max-classes $cap; " +
-                        "narrowed to first half (${half.size} entries)",
+                        "narrowed to first $cap entries",
                 )
-                half
+                capped
             } else {
                 recorded
             }

@@ -132,9 +132,9 @@ class FlakydiffCliTest {
     }
 
     @Test
-    fun `diagnose - max-classes caps prefix to first half with warning`() {
+    fun `diagnose - max-classes caps prefix to N entries with warning`() {
         val dir = tmp.resolve("reports4")
-        for (i in 1..4) {
+        for (i in 1..6) {
             writeReport(dir, "TEST-c$i.xml", "com.example.A$i", "m1", false, "2026-01-01T00:00:0$i" + "Z")
         }
         writeReport(dir, "TEST-v.xml", "com.example.ZVictim", "flaky", true, "2026-01-01T00:00:20Z")
@@ -143,11 +143,12 @@ class FlakydiffCliTest {
 
         val code = cli.execute(
             "diagnose", "--project", tmp.toString(), "--reports", dir.toString(),
-            "--victim", "com.example.ZVictim#flaky", "--max-classes", "3",
+            "--victim", "com.example.ZVictim#flaky", "--max-classes", "2",
         )
 
         assertEquals(0, code, cli.stderr.toString("UTF-8"))
-        // записанный prefix — 4 класса; кап 3 превышен → первая половина (2)
+        // записанный prefix — 6 классов; кап 2 → ровно первые 2 записи:
+        // «первая половина» (3) нарушала бы кап — митигация стоимости не работала
         val step1 = h.calls.first { it.prefix.isNotEmpty() }
         assertEquals(2, step1.prefix.size, "prefix после капа: ${step1.prefix}")
         assertTrue(cli.stdout.toString("UTF-8").contains("max-classes"), "предупреждение о сужении")
