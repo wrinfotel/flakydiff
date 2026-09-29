@@ -160,11 +160,11 @@ class JvmReplayHarness(
     }
 
     private fun victimTimeoutSec(victim: TestRef): Long =
-        ((victimTimeoutMs ?: clamp((durationsMs[victim] ?: 0L) * 5)) + 999) / 1000
+        ((victimTimeoutMs ?: clamp(durationsMs[victim] ?: 0L)) + 999) / 1000
 
     private fun defaultProbeTimeoutMs(prefix: List<TestRef>, victim: TestRef, repeat: Int): Long {
         val prefixSum = prefix.sumOf { durationsMs[it] ?: 0L }
-        val vt = victimTimeoutMs ?: clamp((durationsMs[victim] ?: 0L) * 5)
+        val vt = victimTimeoutMs ?: clamp(durationsMs[victim] ?: 0L)
         return (prefixSum * 2 + vt * repeat + 60_000).coerceAtMost(900_000)
     }
 
