@@ -30,7 +30,7 @@ cat > dist/HOWTO.txt <<EOF
 flakydiff v${version} — поиск минимального набора polluter-тестов (order dependency)
 для flaky JVM-теста по XML-отчётам surefire.
 
-Требования: JDK 11+; Maven-проект жертвы; XML-отчёты последнего прогона.
+Требования: JDK 17+; Maven-проект жертвы; XML-отчёты последнего прогона.
 Каждый зонд — свежая JVM; недостоверность порядка/форки/флейк жертвы всегда
 видны в вердикте (order_unreliable / forks_possible / victim_unstable_in_isolation).
 
