@@ -137,7 +137,7 @@ class JvmReplayHarness(
         val cmd = mutableListOf<String>()
         cmd.add(javaExecutable())
         project.systemProperties.forEach { (k, v) -> cmd.add("-D$k=$v") }
-        project.argLine?.split(WHITESPACE)?.forEach { if (it.isNotBlank()) cmd.add(it) }
+        splitArgLine(project.argLine ?: "").forEach(cmd::add)
         cmd.add("-cp")
         cmd.add(cp)
         cmd.add("io.github.wrinfotel.flakydiff.replay.ReplayMain")
@@ -192,8 +192,41 @@ class JvmReplayHarness(
             )
         }
     }
+}
 
-    private companion object {
-        val WHITESPACE = Regex("\\s+")
+/**
+ * argLine — строка аргументов JVM, а не shell-команда: ProcessBuilder передаёт токены
+ * напрямую, без шелл-разбора. Двойные кавычки группируют пробелы внутри одного
+ * аргумента (javaagent с путём «C:\Program Files\...»), `\"` — литеральная кавычка.
+ */
+internal fun splitArgLine(argLine: String): List<String> {
+    val tokens = mutableListOf<String>()
+    val current = StringBuilder()
+    var inQuotes = false
+    var hasToken = false
+    var i = 0
+    while (i < argLine.length) {
+        val c = argLine[i]
+        when {
+            c == '\\' && i + 1 < argLine.length && argLine[i + 1] == '"' -> {
+                current.append('"')
+                hasToken = true
+                i += 2
+                continue
+            }
+            c == '"' -> inQuotes = !inQuotes
+            !inQuotes && c.isWhitespace() -> {
+                if (hasToken) tokens.add(current.toString())
+                current.setLength(0)
+                hasToken = false
+            }
+            else -> {
+                current.append(c)
+                hasToken = true
+            }
+        }
+        i++
     }
+    if (hasToken) tokens.add(current.toString())
+    return tokens
 }

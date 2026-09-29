@@ -88,4 +88,26 @@ class JvmReplayHarnessCommandTest {
 
         assertEquals("45", cmd[cmd.indexOf("--victim-timeout") + 1])
     }
+
+    @Test
+    fun `argLine quoted token with spaces stays one JVM argument`() {
+        // javaagent с пробелом в пути — типичный jacoco/агент на Windows; ProcessBuilder
+        // передаёт токены без shell: кавычки съедает токенизатор, пробел остаётся внутри
+        val h = harness(argLine = """-javaagent:"C:\Program Files\agent.jar" -Xmx512m""")
+
+        val cmd = h.buildCommand(listOf(polluter), statefulVictim, 3, Path.of("r.json"))
+
+        val jvmArgs = cmd.subList(1, cmd.indexOf("-cp"))
+        assertEquals(listOf("""-javaagent:C:\Program Files\agent.jar""", "-Xmx512m"), jvmArgs)
+    }
+
+    @Test
+    fun `argLine escaped quote inside token is preserved literally`() {
+        val h = harness(argLine = """-Dquote="a \"b\" c" -Xss2m""")
+
+        val cmd = h.buildCommand(listOf(polluter), statefulVictim, 3, Path.of("r.json"))
+
+        val jvmArgs = cmd.subList(1, cmd.indexOf("-cp"))
+        assertEquals(listOf("""-Dquote=a "b" c""", "-Xss2m"), jvmArgs)
+    }
 }
