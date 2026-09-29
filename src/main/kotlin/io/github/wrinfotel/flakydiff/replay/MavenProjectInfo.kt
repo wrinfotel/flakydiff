@@ -189,14 +189,22 @@ private fun reactorPoms(projectDir: Path): List<Path> {
 private fun parseSurefireConfig(effectivePomFile: Path): SurefireConfig {
     val doc = parseXml(effectivePomFile)
     val plugins = doc.getElementsByTagName("plugin")
+    // В effective-pom секции <profiles> и <build>/<pluginManagement> идут ДО
+    // реального объявления в build/plugins (корпоративные parent-pom, неактивные
+    // профили). Первое совпадение брало чужую конфигурацию: выбор по приоритету
+    // контекста, при равенстве — последнее (младший модуль реактора перекрывает).
     var surefire: Element? = null
+    var bestTier = -1
     for (i in 0 until plugins.length) {
         val plugin = plugins.item(i) as Element
         val groupId = plugin.directChild("groupId")?.textContent?.trim()
         val artifactId = plugin.directChild("artifactId")?.textContent?.trim()
         if (groupId == "org.apache.maven.plugins" && artifactId == "maven-surefire-plugin") {
-            surefire = plugin
-            break
+            val tier = pluginTier(plugin)
+            if (tier >= bestTier) {
+                bestTier = tier
+                surefire = plugin
+            }
         }
     }
     val configuration = surefire?.directChild("configuration")
@@ -241,6 +249,30 @@ private fun Element.directChild(tag: String): Element? {
         if (node is Element && node.tagName == tag) return node
     }
     return null
+}
+
+/**
+ * Приоритет контекста surefire-плагина: 2 — build/plugins (реальная конфигурация
+ * выполнения; сюда же effective-pom сливает активные профили), 1 — pluginManagement
+ * (дефолты, работают только пока нет своей конфигурации), 0 — секция профиля
+ * (неактивный профиль не должен затенять build).
+ */
+private fun pluginTier(plugin: Element): Int {
+    var inManagement = false
+    var inProfiles = false
+    var node = plugin.parentNode
+    while (node is Element) {
+        when (node.tagName) {
+            "pluginManagement" -> inManagement = true
+            "profiles" -> inProfiles = true
+        }
+        node = node.parentNode
+    }
+    return when {
+        !inManagement && !inProfiles -> 2
+        inManagement -> 1
+        else -> 0
+    }
 }
 
 private fun parseXml(file: Path): org.w3c.dom.Document {

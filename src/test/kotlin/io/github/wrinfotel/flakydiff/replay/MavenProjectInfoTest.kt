@@ -199,4 +199,73 @@ class MavenProjectInfoTest {
             "явные переменные остаются",
         )
     }
+
+    private fun surefirePlugin(argLine: String): String = """
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration><argLine>$argLine</argLine></configuration>
+        </plugin>
+    """.trimIndent()
+
+    private fun pomXml(body: String): String = """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>fix</groupId><artifactId>f</artifactId><version>1</version>
+          $body
+        </project>
+    """.trimIndent()
+
+    @Test
+    fun `build plugins surefire wins over earlier profile declaration`() {
+        // effective-pom держит секцию profiles ДО build: неактивный профиль с
+        // surefire-конфигом не должен затенять реальную конфигурацию выполнения
+        val xml = pomXml(
+            """
+            <profiles>
+              <profile>
+                <id>legacy</id>
+                <build><plugins>${surefirePlugin("PROFILE-ONLY")}</plugins></build>
+              </profile>
+            </profiles>
+            <build><plugins>${surefirePlugin("REAL")}</plugins></build>
+            """.trimIndent(),
+        )
+
+        val info = prepareProject(fixtureProject(), cacheDir(), RecordingRunner(xml))
+
+        assertEquals("REAL", info.argLine, "конфиг build/plugins обязателен, не первый <plugin> в документе")
+    }
+
+    @Test
+    fun `build plugins surefire wins over pluginManagement`() {
+        // pluginManagement (корпоративные parent-pom) идёт перед build/plugins
+        val xml = pomXml(
+            """
+            <build>
+              <pluginManagement><plugins>${surefirePlugin("MGMT")}</plugins></pluginManagement>
+              <plugins>${surefirePlugin("REAL")}</plugins>
+            </build>
+            """.trimIndent(),
+        )
+
+        val info = prepareProject(fixtureProject(), cacheDir(), RecordingRunner(xml))
+
+        assertEquals("REAL", info.argLine, "объявление в build/plugins затеняет pluginManagement")
+    }
+
+    @Test
+    fun `pluginManagement surefire used when build has no declaration`() {
+        val xml = pomXml(
+            """
+            <build>
+              <pluginManagement><plugins>${surefirePlugin("MGMT-ONLY")}</plugins></pluginManagement>
+            </build>
+            """.trimIndent(),
+        )
+
+        val info = prepareProject(fixtureProject(), cacheDir(), RecordingRunner(xml))
+
+        assertEquals("MGMT-ONLY", info.argLine, "без build-объявления берутся дефолты pluginManagement")
+    }
 }
