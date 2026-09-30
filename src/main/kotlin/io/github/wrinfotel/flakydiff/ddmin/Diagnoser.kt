@@ -6,56 +6,56 @@ import io.github.wrinfotel.flakydiff.replay.ReplayHarness
 import io.github.wrinfotel.flakydiff.replay.ReplayResult
 
 /**
- * Результат шага 0 (спека §4.3): жертва изолированно, БЕЗ prefix.
- * Любой NOT_ISOLATED — не order-dependency: идти в другую гипотезу.
+ * Result of step 0 (spec §4.3): the victim in isolation, WITHOUT the prefix.
+ * Any NOT_ISOLATED — not order-dependency: move on to another hypothesis.
  */
 sealed interface Step0Result {
-    /** Повторы жертвы все прошли — порядок-dep возможен, идём к шагу 1. */
+    /** All victim repeats passed — order-dependency is possible, proceed to step 1. */
     data object Isolated : Step0Result
 
     /**
-     * Тест падает/флейкует сам по себе. [victimUnstableInIsolation] — флаг
-     * victim_unstable_in_isolation: true ⟺ бакет WEAK («2/3 прошло» — подозрение
-     * на флейк самого теста); false — бакет FAILS (тест просто падает сам).
+     * The test fails/flakes on its own. [victimUnstableInIsolation] — the
+     * victim_unstable_in_isolation flag: true ⟺ the WEAK bucket ("2/3 passed" — a suspicion
+     * that the test itself is flaky); false — the FAILS bucket (the test simply fails on its own).
      */
     data class NotIsolated(val victimUnstableInIsolation: Boolean) : Step0Result
 
-    /** Инфра сломана — чинить окружение, не тест (диагностика прилагается). */
+    /** Infra is broken — fix the environment, not the test (diagnostics included). */
     data class InfraBroken(val cause: String) : Step0Result
 }
 
 /**
- * Шаг 0: жертва изолированно (без prefix) проходит repeat/repeat — иначе в ddmin не идём.
+ * Step 0: the victim in isolation (without the prefix) passes repeat/repeat — otherwise we don't go into ddmin.
  */
 fun step0(harness: ReplayHarness, victim: TestRef, repeat: Int = 3): Step0Result {
     val result = harness.replay(emptyList(), victim, repeat)
     return when (val outcome = classify(result)) {
         ProbeOutcome.PASSES -> Step0Result.Isolated
-        // флаг ⟺ WEAK по построению (план Task 3.2): отдельный WEAK_FLAKY не нужен
+        // the flag ⟺ WEAK by construction (plan Task 3.2): a separate WEAK_FLAKY is not needed
         ProbeOutcome.WEAK -> Step0Result.NotIsolated(victimUnstableInIsolation = true)
         ProbeOutcome.FAILS -> Step0Result.NotIsolated(victimUnstableInIsolation = false)
         ProbeOutcome.INFRA -> Step0Result.InfraBroken((result as ReplayResult.InfraError).cause)
     }
 }
 
-/** Результат шага 1 (спека §4.3): полный prefix + жертва обязан падать. */
+/** Result of step 1 (spec §4.3): the full prefix + the victim must fail. */
 sealed interface Step1Result {
     /**
-     * Полный prefix воспроизводит падение — идём в ddmin. [failures]/[attempts] —
-     * честный rate зонда; уходит в вердикт (reproducedRate, evidence «после polluter»).
+     * The full prefix reproduces the failure — go into ddmin. [failures]/[attempts] —
+     * the honest probe rate; goes into the verdict (reproducedRate, the "after polluter" evidence).
      */
     data class ReproducedWithFullPrefix(val failures: Int, val attempts: Int) : Step1Result
 
-    /** Полный prefix НЕ воспроизводит (включая слабый сигнал) — вероятны race/время, вне v1. */
+    /** The full prefix does NOT reproduce it (weak signal included) — likely races/timing, out of scope for v1. */
     data class NotReproduced(val passes: Int, val attempts: Int) : Step1Result
 
-    /** Инфра сломана — чинить окружение, не тест. */
+    /** Infra is broken — fix the environment, not the test. */
     data class InfraBroken(val cause: String) : Step1Result
 }
 
 /**
- * Шаг 1: полный prefix + жертва обязана падать (по критерию бакетов). PASSES и WEAK
- * консервативно ведут в NOT_REPRODUCED — честный rate сохраняется для вердикта.
+ * Step 1: the full prefix + the victim must fail (per the bucket criteria). PASSES and WEAK
+ * conservatively lead to NOT_REPRODUCED — the honest rate is preserved for the verdict.
  */
 fun step1(harness: ReplayHarness, prefix: List<TestRef>, victim: TestRef, repeat: Int = 3): Step1Result {
     val result = harness.replay(prefix, victim, repeat)
@@ -81,58 +81,58 @@ fun step1(harness: ReplayHarness, prefix: List<TestRef>, victim: TestRef, repeat
 }
 
 /**
- * Итог диагностики (спека §4.3–4.4): имена в коде/JSON — с подчёркиваниями,
- * в чек-листе §5 — те же через дефис (NOT_ISOLATED = NOT-ISOLATED).
+ * The diagnosis outcome (spec §4.3–4.4): names in code/JSON use underscores,
+ * in the §5 checklist the same names with hyphens (NOT_ISOLATED = NOT-ISOLATED).
  */
 sealed interface Diagnosis {
-    /** Порядок-dep найден и подтверждён свежей JVM: ≥4 из 5 повторов жертвы упали. */
+    /** Order-dependency found and confirmed by a fresh JVM: ≥4 of 5 victim repeats failed. */
     data class OrderDependency(
         val victim: TestRef,
         val polluters: List<TestRef>,
         val lastFailure: TestFailure?,
-        /** Rate шага 1 (полный prefix) — для вердикта (reproducedRate, evidence). */
+        /** Step 1 rate (full prefix) — for the verdict (reproducedRate, evidence). */
         val reproducedFailures: Int,
         val reproducedAttempts: Int,
         val confirmationFailures: Int,
         val confirmationAttempts: Int,
     ) : Diagnosis
 
-    /** ddmin нашёл множество, но confirmation не дотянул до ≥4/5 — честный rate фиксируем. */
+    /** ddmin found a set, but confirmation fell short of ≥4/5 — the honest rate is recorded. */
     data class Unconfirmed(
         val victim: TestRef,
         val polluters: List<TestRef>,
-        /** Rate шага 1 (полный prefix) — для вердикта (reproducedRate, evidence). */
+        /** Step 1 rate (full prefix) — for the verdict (reproducedRate, evidence). */
         val reproducedFailures: Int,
         val reproducedAttempts: Int,
         val confirmationFailures: Int,
         val confirmationAttempts: Int,
     ) : Diagnosis
 
-    /** Шаг 0: жертва падает/флейкует сама по себе — не order-dependency. */
+    /** Step 0: the victim fails/flakes on its own — not order-dependency. */
     data class NotIsolated(val victim: TestRef, val victimUnstableInIsolation: Boolean) : Diagnosis
 
-    /** Шаг 1: полный prefix не воспроизводит падение — вероятны race/время (вне v1). */
+    /** Step 1: the full prefix does not reproduce the failure — likely races/timing (out of scope for v1). */
     data class NotReproduced(val victim: TestRef, val passes: Int, val attempts: Int) : Diagnosis
 
-    /** Инфра сломана (единая политика §4.3): чинить окружение, не тест; сужений не показываем. */
+    /** Infra broken (the unified §4.3 policy): fix the environment, not the test; no narrowing results are shown. */
     data class InfraBroken(val cause: String) : Diagnosis
 
     /**
-     * Форма жертвы, которую v1 не диагностирует (план Task 4.3): display-name
-     * invocation параметризованного теста (check(int)[1]). Фолбэк «класс +
-     * префикс имени» гоняет все invocations разом и не изолирует отдельный
-     * повтор — честный отказ с именем теста, БЕЗ зондов и без сужений.
+     * A victim shape v1 does not diagnose (plan Task 4.3): display-name
+     * invocation of a parameterized test (check(int)[1]). The "class +
+     * name-prefix" fallback runs all invocations at once and does not isolate
+     * a single repeat — an honest refusal with the test name, WITHOUT probes and without narrowing.
      */
     data class Unsupported(val victim: TestRef, val reason: String) : Diagnosis
 }
 
-/** Confirmation — отдельный зонд в свежей JVM, критерий сознательно строже ddmin: ≥4 из 5 (80% против 67%). */
+/** Confirmation — a separate probe in a fresh JVM; its criterion is deliberately stricter than ddmin's: ≥4 of 5 (80% vs 67%). */
 private const val CONFIRM_REPEAT = 5
 private const val CONFIRM_MIN_FAILURES = 4
 
 /**
- * Полный пайплайн: шаг 0 (изоляция) → шаг 1 (полный prefix) → ddmin →
- * fresh-process confirmation. Каждая ступень честно может остановить диагноз.
+ * The full pipeline: step 0 (isolation) → step 1 (full prefix) → ddmin →
+ * fresh-process confirmation. Each stage can honestly stop the diagnosis.
  */
 fun diagnose(
     harness: ReplayHarness,
@@ -141,8 +141,8 @@ fun diagnose(
     repeat: Int = 3,
     threshold: Int = 2,
 ): Diagnosis {
-    // display-name жертвы (параметризованный тест) — до любых зондов: повтор
-    // отдельного invocation в свежей JVM невозможен, зондить такое — мусор.
+    // victim display-name (parameterized test) — before any probes: repeating
+    // a single invocation in a fresh JVM is impossible, probing it would only produce garbage.
     if (victim.method.contains('(') || victim.method.contains('[')) {
         return Diagnosis.Unsupported(
             victim,
@@ -172,7 +172,7 @@ fun diagnose(
     val failures = when (confirmation) {
         is ReplayResult.Reproduced -> confirmation.failures
         is ReplayResult.NotReproduced -> confirmation.attempts - confirmation.passes
-        // Единая политика §4.3: InfraError ≠ фейл теста — INFRA_BROKEN, не UNCONFIRMED
+        // Unified policy §4.3: InfraError ≠ a test failure — INFRA_BROKEN, not UNCONFIRMED
         is ReplayResult.InfraError -> return Diagnosis.InfraBroken(confirmation.cause)
     }
     return if (failures >= CONFIRM_MIN_FAILURES) {

@@ -4,8 +4,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * @BeforeAll требует системное свойство «{{KEY}}»: без него — падение стадии
- * подготовки, которое FailureClassifier относит к INFRA (спека §4.2), не фейл теста.
+ * @BeforeAll requires the "{{KEY}}" system property: without it — a setup-stage
+ * failure that FailureClassifier classifies as INFRA (spec §4.2), not a test failure.
  */
 public class {{NAME}} {
 

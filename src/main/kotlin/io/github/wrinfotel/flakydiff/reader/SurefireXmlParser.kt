@@ -33,7 +33,7 @@ private fun failurePayload(el: Element): TestFailure = TestFailure(
     content = el.textContent.ifEmpty { null },
 )
 
-/** ISO-8601: Instant (…Z), OffsetDateTime, либо LocalDateTime в системной зоне. */
+/** ISO-8601: Instant (…Z), OffsetDateTime, or LocalDateTime in the system zone. */
 internal fun parseTimestampValue(value: String): Long? = try {
     Instant.parse(value).toEpochMilli()
 } catch (_: DateTimeParseException) {
@@ -76,9 +76,9 @@ fun parse(xml: String): ParseOutcome {
                         status = Status.FAILED
                         failure = failurePayload(child)
                     }
-                    // rerun-элементы (rerunFailingTestsCount): flaky* — упал, перезапуск прошёл,
-                    // rerun* — упал и перезапуск тоже. Первый прогон — сам testcase: прямой
-                    // <failure>/<error>, а для flaky* — сам rerun-элемент описывает первую попытку.
+                    // rerun elements (rerunFailingTestsCount): flaky* — failed, the rerun passed;
+                    // rerun* — failed and the rerun failed too. The first run is the testcase itself: a direct
+                    // <failure>/<error>, while for flaky* the rerun element itself describes the first attempt.
                     "flakyFailure", "flakyError", "rerunFailure", "rerunError" -> {
                         markedFlaky += ref
                         if (failure == null) {

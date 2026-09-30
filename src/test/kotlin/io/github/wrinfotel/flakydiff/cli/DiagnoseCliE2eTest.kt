@@ -16,13 +16,13 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
 /**
- * DoD-п.2 (план): CLI-smoke на fixture — diagnose по реальному fixture-проекту
- * (mvn-зонды, БЕЗ подмены харнесса), replay даёт Reproduced на fixture-polluter,
- * report читает JSON вердикта и рендерит текст.
+ * DoD item 2 (plan): CLI smoke on a fixture — diagnose against a real fixture project
+ * (mvn probes, NO harness substitution), replay returns Reproduced on the fixture polluter,
+ * report reads the verdict JSON and renders the text.
  *
- * Регрессия (найдена DoD-smoke): относительный --project ломал prepareProject —
- * mvn пишет classpath-файл относительно СВОЕЙ cwd, а код искал его относительно
- * cwd CLI. Проект обязан нормализоваться в абсолютный путь до prepareProject.
+ * Regression (found by the DoD smoke): a relative --project broke prepareProject —
+ * mvn writes the classpath file relative to ITS OWN cwd, while the code looked for it relative
+ * to the CLI's cwd. The project must be normalized to an absolute path before prepareProject.
  */
 @Tag("integration")
 class DiagnoseCliE2eTest {
@@ -66,7 +66,7 @@ class DiagnoseCliE2eTest {
         val victim = "io.github.wrinfotel.fixture.T03_VictimTest#shouldWork"
         val outDir = fixtureDir.resolve("verdict-out")
 
-        // 1) diagnose: относительный --project, реальные mvn-зонды в свежих JVM
+        // 1) diagnose: relative --project, real mvn probes in fresh JVMs
         val code = execute(
             "diagnose",
             "--project", fixtureDir.toString(),
@@ -80,14 +80,14 @@ class DiagnoseCliE2eTest {
         assertTrue(verdictText.contains("VERDICT: ORDER-DEPENDENCY"), verdictText)
         assertTrue(verdictText.contains("polluter: io.github.wrinfotel.fixture.T02_PolluterTest#pollutes"), verdictText)
 
-        // 2) report: JSON вердикта читается обратно и рендерится в текст
+        // 2) report: the verdict JSON is read back and rendered as text
         val json = outDir.resolve("verdict.json")
         assertTrue(Files.exists(json), "JSON вердикта записан в --out")
         val reportCode = execute("report", "--verdict", json.toString())
         assertEquals(0, reportCode, stderr.toString("UTF-8"))
         assertTrue(stdout.toString("UTF-8").contains("VERDICT: ORDER-DEPENDENCY"))
 
-        // 3) replay: polluter-запись БЕЗ #method (форма repro-команды) — Reproduced
+        // 3) replay: polluter entry WITHOUT #method (the repro-command form) — Reproduced
         val replayCode = execute(
             "replay",
             "--project", fixtureDir.toString(),

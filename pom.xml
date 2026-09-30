@@ -24,7 +24,7 @@
 
   <dependencyManagement>
     <dependencies>
-      <!-- платформа и jupiter обязаны быть одной версии (перекос ломает discovery) -->
+      <!-- the platform and jupiter must be the same version (a mismatch breaks discovery) -->
       <dependency>
         <groupId>org.junit</groupId>
         <artifactId>junit-bom</artifactId>
@@ -36,7 +36,7 @@
   </dependencyManagement>
 
   <dependencies>
-    <!-- нужен в рантайме зондов, поэтому scope compile; версия из junit BOM -->
+    <!-- needed at probe runtime, hence scope compile; version comes from the junit BOM -->
     <dependency>
       <groupId>org.junit.platform</groupId>
       <artifactId>junit-platform-launcher</artifactId>
@@ -57,10 +57,10 @@
       <artifactId>kotlinx-serialization-json</artifactId>
       <version>${kotlinx-serialization.version}</version>
     </dependency>
-    <!-- jupiter (api+engine) нужен в рантайме зондов: Launcher без движка мёртв, а
-         replay-jar обязан доносить TestEngine до проектов без jupiter в deps.
-         Версию держит junit BOM; в команде зонда classpath проекта первым —
-         движок проекта пользователя всегда выигрывает. -->
+    <!-- jupiter (api+engine) is needed at probe runtime: a Launcher without an engine is dead, and
+         the replay-jar must carry the TestEngine to projects without jupiter in their deps.
+         The version is managed by the junit BOM; in the probe command the project classpath
+         comes first — the user project's engine always wins. -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -115,9 +115,9 @@
           </execution>
         </executions>
       </plugin>
-      <!-- Два execution одного shade-плагина = второй артефакт flakydiff-replay без
-           второго модуля (спека v1.5). Порядок важен: сначала attached replay-jar
-           (основной артефакт не трогаем), затем cli-shade затеняет основной jar. -->
+      <!-- Two executions of one shade plugin = a second flakydiff-replay artifact without
+           a second module (spec v1.5). The order matters: first the attached replay-jar
+           (the main artifact is left alone), then cli-shade shades the main jar. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -132,10 +132,10 @@
             <configuration>
               <shadedArtifactAttached>true</shadedArtifactAttached>
               <shadedClassifierName>replay</shadedClassifierName>
-              <!-- flakydiff не публикует затенённый pom; CLI-дистрибутив собирается локально -->
+              <!-- flakydiff does not publish a shaded pom; the CLI distribution is built locally -->
               <createDependencyReducedPom>false</createDependencyReducedPom>
-              <!-- зонду не нужны CLI-зависимости; поэтому ReplayMain сериализует JSON вручную,
-                   а kotlinx-serialization остаётся на CLI-стороне -->
+              <!-- the probe does not need CLI dependencies; that is why ReplayMain serializes
+                   JSON by hand, while kotlinx-serialization stays on the CLI side -->
               <artifactSet>
                 <excludes>
                   <artifact>info.picocli:*</artifact>
@@ -155,8 +155,8 @@
                 </filter>
               </filters>
               <transformers>
-                <!-- JUnit Platform находит TestEngine через SPI: файлы META-INF/services/*
-                     из разных jars обязаны склеиться, иначе Launcher не увидит движок -->
+                <!-- JUnit Platform discovers TestEngine via SPI: the META-INF/services/* files
+                     from different jars must be merged, otherwise the Launcher will not see the engine -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <manifestEntries>
@@ -202,10 +202,10 @@
     </plugins>
   </build>
 
-  <!-- Разделение интеграционных тестов ТОЛЬКО профилями: excludedGroups в базовой
-       конфигурации конфликтует с -Dgroups/-P full (excludedGroups выигрывает, CI
-       молча гоняет ноль интеграционных тестов). Поэтому fast несёт исключение,
-       full — чистый surefire без groups-конфигурации. -->
+  <!-- Separation of integration tests via profiles ONLY: excludedGroups in the base
+       configuration conflicts with -Dgroups/-P full (excludedGroups wins, and CI
+       silently runs zero integration tests). That is why fast carries the exclusion,
+       while full is a clean surefire without groups configuration. -->
   <profiles>
     <profile>
       <id>fast</id>

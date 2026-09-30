@@ -9,10 +9,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Task 5.2 (план): текстовый рендер — в точности формат §4.4 спеки (VERDICT-заголовок,
- * строки victim/polluter/evidence/flags/repro); эталоны — КОНСТАНТЫ здесь, с тестовыми
- * именами. Примеры §4.4 — иллюстрация формата, а не контракт. Один polluter — одна
- * строка polluter, два — две. JSON — те же поля camelCase (kotlinx-serialization).
+ * Task 5.2 (plan): text rendering — exactly the §4.4 format of the spec (VERDICT header,
+ * victim/polluter/evidence/flags/repro lines); the goldens are CONSTANTS here, with test
+ * names. The §4.4 examples illustrate the format, they are not the contract. One polluter
+ * is one polluter line, two are two. JSON — the same fields in camelCase (kotlinx-serialization).
  */
 class VerdictRenderTest {
 
@@ -183,8 +183,8 @@ class VerdictRenderTest {
 
     @Test
     fun `json uses camelCase keys and underscored type name`() {
-        // Рукаописный JSON фиксирует имена ключей (план Task 5.2: те же поля camelCase,
-        // тип — подчёркивания) — парсинг обязан принимать ровно такой документ.
+        // Hand-written JSON pins down the key names (plan Task 5.2: the same fields in camelCase,
+        // the type name uses underscores) — parsing must accept exactly this document.
         val raw = """
             {
               "type": "ORDER_DEPENDENCY",

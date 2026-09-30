@@ -3,9 +3,9 @@ package io.github.wrinfotel.flakydiff.replay
 import org.junit.jupiter.api.Test
 
 /**
- * Фейковые классы для JvmReplayHarness (Task 2.5): статическое состояние,
- * жертва, зависящая от загрязнения, и зависающая жертва для victim-timeout.
- * Имена не попадают под include-паттерны surefire.
+ * Fake classes for JvmReplayHarness (Task 2.5): static state, a pollution-dependent
+ * victim, and a hanging victim for victim-timeout.
+ * The names do not match the surefire include patterns.
  */
 object SharedProbeState {
     @JvmStatic
@@ -36,10 +36,10 @@ class FakeHangingVictim {
 }
 
 /**
- * Порядочно-чувствительная пара (ревью v1, Important): cleaner обязан исполняться
- * ПОСЛЕ polluter'а в записанном порядке — иначе не снимет загрязнение. Имена
- * подобраны под ClassOrderer.ClassName: алфавитный порядок (Cleaner < Polluter)
- * обратен порядку записи — тест порядка prefix форсирует коллизию осознанно.
+ * Order-sensitive pair (v1 review, Important): the cleaner must run AFTER the polluter
+ * in the recorded order — otherwise it will not remove the pollution. The names are
+ * chosen for ClassOrderer.ClassName: alphabetical order (Cleaner < Polluter) is the
+ * reverse of the recorded order — the prefix order test forces the collision deliberately.
  */
 class FakeOrderCleaner {
     @Test

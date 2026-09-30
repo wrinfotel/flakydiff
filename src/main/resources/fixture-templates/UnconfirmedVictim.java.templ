@@ -5,11 +5,11 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Жертва с граничным счётом для confirmation (спека §5 кейс 10): под загрязнением
- * ключа «{{KEY}}» падает на запусках 2–4 — в зонде repeat=3 даёт 2/3 упавших
- * (ddmin воспроизводит), в confirmation repeat=5 даёт ровно 3/5 упавших (<4 →
- * UNCONFIRMED). Чистая JVM — все повторы проходят. Счётчик живёт одну JVM зонда,
- * между зондами не переносится. Моделирует жертву с ограниченным «окном флейка».
+ * Victim with a boundary count for confirmation (spec §5 case 10): under pollution
+ * of the "{{KEY}}" key it fails on runs 2–4 — with probe repeat=3 that gives 2/3 failed
+ * (ddmin reproduces), with confirmation repeat=5 exactly 3/5 failed (<4 →
+ * UNCONFIRMED). A clean JVM — all repeats pass. The counter lives for one probe JVM
+ * and is not carried across probes. Models a victim with a limited "flake window".
  */
 public class {{NAME}} {
 

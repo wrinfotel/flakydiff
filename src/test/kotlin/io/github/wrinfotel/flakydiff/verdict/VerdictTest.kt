@@ -11,11 +11,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Task 5.1 (план): сборка вердикта из результатов этапа 3. Контракт repro-команды:
- * polluter-записи — FQCN БЕЗ #method (replay запускает весь класс, форма допущена
- * контрактом Task 2.1), жертва — FQCN#method. Без polluters (NOT_ISOLATED,
- * NOT_REPRODUCED, INFRA_BROKEN, UNSUPPORTED) reproCommand = null — воспроизводить
- * нечем, честно не выдаём команду, которая заведомо не сработает.
+ * Task 5.1 (plan): building the verdict from the stage 3 results. Repro command contract:
+ * polluter entries — FQCN WITHOUT #method (replay runs the whole class; the form is
+ * allowed by the Task 2.1 contract), the victim — FQCN#method. Without polluters
+ * (NOT_ISOLATED, NOT_REPRODUCED, INFRA_BROKEN, UNSUPPORTED) reproCommand = null —
+ * there is nothing to reproduce; we honestly do not emit a command bound to fail.
  */
 class VerdictTest {
 
@@ -23,7 +23,7 @@ class VerdictTest {
     private val polluter = TestRef("com.example.PolluterTest", "pollutes")
     private val failure = TestFailure("org.opentest4j.AssertionFailedError", "field not clean", null)
 
-    /** Базовый контекст: порядок надёжен, форки возможны, жертва в XML не помечена flaky. */
+    /** Base context: the order is reliable, forks are possible, the victim is not marked flaky in the XML. */
     private fun ctx(
         projectDir: String = "path/to/project",
         orderUnreliable: Boolean = false,
@@ -61,7 +61,7 @@ class VerdictTest {
         assertFalse(v.markedFlakyInRun)
         assertFalse(v.victimUnstableInIsolation)
         assertNull(v.diagnostics)
-        // polluter — FQCN без #method, жертва — FQCN#method
+        // polluter — FQCN without #method, victim — FQCN#method
         assertEquals(
             "flakydiff replay --project path/to/project " +
                 "--prefix com.example.PolluterTest " +
@@ -72,9 +72,9 @@ class VerdictTest {
 
     @Test
     fun `repro command carries victim timeout above the 30s floor`() {
-        // replay без XML не знает длительности жертвы: его дефолт — пол clamp'а 30s,
-        // который убил бы повторы медленной жертвы. Вердикт отдаёт фактическую рамку
-        // диагностики в repro-команду (ревью v1, Important).
+        // replay without XML does not know the victim's duration: its default is the
+        // floor of the 30s clamp, which would kill repeats of a slow victim. The verdict
+        // puts the actual diagnosis budget into the repro command (review v1, Important).
         val d = Diagnosis.OrderDependency(
             victim, listOf(polluter), failure,
             reproducedFailures = 3, reproducedAttempts = 3,

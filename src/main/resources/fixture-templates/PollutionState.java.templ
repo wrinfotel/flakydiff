@@ -4,9 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Общая статика fixture-проекта: polluter «грязнит» ключ, victim ассертит чистоту.
- * Живёт одну JVM (записанный прогон или зонд) — семантика загрязнения спеки §4.2:
- * состояние между повторами жертвы не сбрасывается, между зондами не переносится.
+ * Shared static state of the fixture project: a polluter "pollutes" a key, the victim asserts it is clean.
+ * Lives for one JVM (the recorded run or a probe) — the pollution semantics of spec §4.2:
+ * the state is not reset between victim repeats and is not carried across probes.
  */
 public final class PollutionState {
 

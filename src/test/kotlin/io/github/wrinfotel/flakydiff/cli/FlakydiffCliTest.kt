@@ -23,16 +23,16 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Task 5.3 (план): CLI diagnose/replay/report. diagnose тестируется на unit-скорости:
- * fake-harness подменяется через subclass DiagnoseCommand (без реальных mvn/JVM),
- * XML — временные файлы. Эталоны: текст вердикта в stdout, JSON в --out.
+ * Task 5.3 (plan): CLI diagnose/replay/report. diagnose is tested at unit speed:
+ * the fake harness is substituted via a DiagnoseCommand subclass (no real mvn/JVM),
+ * XML — temporary files. What we assert: the verdict text in stdout, the JSON in --out.
  */
 class FlakydiffCliTest {
 
     @TempDir
     lateinit var tmp: Path
 
-    /** Запуск CLI с подменой DiagnoseCommand (фабрика picocli) и захватом stdout/stderr. */
+    /** Runs the CLI with a substituted DiagnoseCommand (picocli factory) and captures stdout/stderr. */
     private class CapturedCli(private val diagnose: DiagnoseCommand? = null) {
         val stdout = ByteArrayOutputStream()
         val stderr = ByteArrayOutputStream()
@@ -56,12 +56,12 @@ class FlakydiffCliTest {
         }
     }
 
-    /** Подмена харнесса — единственная точка, где тест отсекает реальный prepareProject+JVM. */
+    /** Harness substitution — the single point where the test cuts off the real prepareProject+JVM. */
     private class FakeDiagnoseCommand(private val harness: ReplayHarness) : DiagnoseCommand() {
         override fun buildHarness(durationsMs: Map<TestRef, Long>): ReplayHarness = harness
     }
 
-    /** step0 проходит; любой зонд с prefix reproduces; confirmation 5/5 → ORDER_DEPENDENCY. */
+    /** step0 passes; any probe with a prefix reproduces; confirmation 5/5 → ORDER_DEPENDENCY. */
     private fun odHarness(victim: TestRef): FakeHarness = FakeHarness { p, v, rep ->
         check(v == victim) { "unexpected victim $v" }
         when {
@@ -71,7 +71,7 @@ class FlakydiffCliTest {
         }
     }
 
-    /** XML с точными suite-timestamp (урок case09: без них порядок — джиттер mtime). */
+    /** XML with exact suite timestamps (lesson from case09: without them the order is mtime jitter). */
     private fun writeReport(
         dir: Path,
         name: String,
@@ -155,8 +155,8 @@ class FlakydiffCliTest {
         )
 
         assertEquals(0, code, cli.stderr.toString("UTF-8"))
-        // записанный prefix — 6 классов; кап 2 → ровно первые 2 записи:
-        // «первая половина» (3) нарушала бы кап — митигация стоимости не работала
+        // the recorded prefix is 6 classes; cap 2 → exactly the first 2 entries:
+        // "the first half" (3) would break the cap — the cost mitigation would not work
         val step1 = h.calls.first { it.prefix.isNotEmpty() }
         assertEquals(2, step1.prefix.size, "prefix после капа: ${step1.prefix}")
         assertTrue(cli.stdout.toString("UTF-8").contains("max-classes"), "предупреждение о сужении")
@@ -172,7 +172,7 @@ class FlakydiffCliTest {
         val code = cli.execute(*diagnoseArgs(standardReports(), "--prefix-file", pf.toString()))
 
         assertEquals(0, code, cli.stderr.toString("UTF-8"))
-        // записанный prefix — 2 класса (ABallast, Polluter); файл сужает ровно до одного
+        // the recorded prefix is 2 classes (ABallast, Polluter); the file narrows it to exactly one
         assertEquals(
             listOf(TestRef("com.example.PolluterTest", "poison")),
             h.calls.first { it.prefix.isNotEmpty() }.prefix,
@@ -202,8 +202,8 @@ class FlakydiffCliTest {
 
     @Test
     fun `replay - help mentions timeout options`() {
-        // replay — ручное воспроизведение: рамки зонда обязаны настраиваться и здесь,
-        // иначе repro медленной жертвы умирает на дефолтных 30s (ревью v1, Important)
+        // replay is manual reproduction: the probe budget must be configurable here too,
+        // otherwise the repro of a slow victim dies at the default 30s (review v1, Important)
         val cli = CapturedCli()
 
         val code = cli.execute("replay", "--help")
@@ -216,8 +216,8 @@ class FlakydiffCliTest {
 
     @Test
     fun `diagnose - repro command carries victim timeout above floor`() {
-        // жертва 10s в XML → clamp(10s×5) = 50s > пола 30s: repro обязан нести рамку,
-        // иначе `flakydiff replay` по команде из вердикта убьёт повторы на 30s
+        // the victim is 10s in the XML → clamp(10s×5) = 50s > the 30s floor: the repro must
+        // carry the budget, otherwise `flakydiff replay` from the verdict kills repeats at 30s
         val dir = tmp.resolve("reports-slow")
         writeReport(dir, "TEST-p.xml", "com.example.PolluterTest", "poison", false, "2026-01-01T00:00:01Z", duration = "10.0")
         writeReport(dir, "TEST-v.xml", "com.example.VictimTest", "flaky", true, "2026-01-01T00:00:11Z", duration = "10.0")

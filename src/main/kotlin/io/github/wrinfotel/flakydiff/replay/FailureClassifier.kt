@@ -1,9 +1,9 @@
 package io.github.wrinfotel.flakydiff.replay
 
 /**
- * Классификация результата повтора жертвы по правилам спеки §4.2. Живёт ТОЛЬКО
- * на CLI-стороне: ReplayMain отдаёт сырые stage+тип исключения в JSON, в
- * replay-jar классификатор не входит.
+ * Classification of the victim-repeat result per the §4.2 spec rules. Lives ONLY
+ * on the CLI side: ReplayMain emits the raw stage+exception type into JSON; the
+ * replay-jar does not include the classifier.
  */
 enum class FailureKind { TEST_FAILURE, INFRA_ERROR }
 
@@ -17,12 +17,12 @@ object FailureClassifier {
     )
 
     fun classify(stage: String?, failureType: String?): FailureKind {
-        // Сломанный classpath — инфраструктура даже если вылетел из тела теста.
+        // A broken classpath is infrastructure even if it blew up from the test body.
         if (failureType in classpathErrorTypes) return FailureKind.INFRA_ERROR
-        // Watchdog ReplayMain: повтор жертвы превысил victim-timeout (спека §4.2).
+        // ReplayMain watchdog: the victim repeat exceeded victim-timeout (spec §4.2).
         if (failureType == "flakydiff.victim-timeout") return FailureKind.INFRA_ERROR
-        // Ошибка подготовки (@BeforeAll/@BeforeEach/движок) — не фейл теста,
-        // независимо от того, какая фаза упала.
+        // A preparation error (@BeforeAll/@BeforeEach/engine) is not a test failure,
+        // regardless of which phase failed.
         if (stage in infraStages) return FailureKind.INFRA_ERROR
         return FailureKind.TEST_FAILURE
     }

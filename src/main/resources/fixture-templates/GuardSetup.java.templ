@@ -3,9 +3,9 @@ package io.github.wrinfotel.fixture;
 import org.junit.jupiter.api.Test;
 
 /**
- * Ставит системное свойство «{{KEY}}» в static-инициализаторе: класс загружается при
- * discovery зонда/прогона, поэтому свойство выставлено до выполнения любого теста.
- * Моделирует скрытую зависимость «среду подготовил чужой тест».
+ * Sets the "{{KEY}}" system property in a static initializer: the class is loaded during
+ * discovery of a probe/run, so the property is already set before any test executes.
+ * Models the hidden dependency "some other test prepared the environment".
  */
 public class {{NAME}} {
 

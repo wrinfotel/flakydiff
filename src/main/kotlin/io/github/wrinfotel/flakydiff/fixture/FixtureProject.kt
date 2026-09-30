@@ -4,46 +4,46 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Сценарии fixture-проекта (план Task 4.1, спека §5). Имя сценария становится
- * простым именем класса с порядковым префиксом: T01_BallastTest и т.д. —
- * алфавитный порядок классов совпадает с записанным порядком прогона.
+ * Fixture-project scenarios (plan Task 4.1, spec §5). A scenario name becomes
+ * the simple class name with an ordinal prefix: T01_BallastTest and so on —
+ * the alphabetical class order matches the recorded run order.
  */
 sealed interface Scenario {
-    /** Имя сценария — часть простого имени класса (T01_<name>Test). */
+    /** The scenario name — part of the simple class name (T01_<name>Test). */
     val name: String
 
-    /** Балласт: [testCount] всегда зелёных тестов (спека: ~200 суммарно, 30 «не ловят»). */
+    /** Ballast: [testCount] always-green tests (spec: ~200 total, 30 of them "catch nothing"). */
     data class SimplePassing(override val name: String, val testCount: Int = 1) : Scenario
 
-    /** Жертва: ассертит, что ключ [key] в статике чист. */
+    /** Victim: asserts that the key [key] is clean in the static state. */
     data class Victim(override val name: String, val key: String) : Scenario
 
-    /** Polluter: грязнит ключ [key], который ассертит жертва. */
+    /** Polluter: pollutes the key [key] that the victim asserts. */
     data class PolluterPollutes(override val name: String, val key: String) : Scenario
 
-    /** Ставит системное свойство [property] в static-инициализаторе (видно до любого теста). */
+    /** Sets the system property [property] in a static initializer (visible before any test runs). */
     data class GuardSetup(override val name: String, val property: String) : Scenario
 
-    /** @BeforeAll требует свойство [guardProperty]: без него — инфра-фейл стадии подготовки. */
+    /** @BeforeAll requires the [guardProperty] property: without it, an infra failure at the setup stage. */
     data class BeforeAllBroken(override val name: String, val guardProperty: String) : Scenario
 
-    /** Нестабильная жертва: 2-й запуск в JVM падает, 1-й и 3-й проходят. */
+    /** Unstable victim: the 2nd run in a JVM fails, the 1st and 3rd pass. */
     data class UnstableVictim(override val name: String) : Scenario
 
     /**
-     * Жертва с граничным счётом: под загрязнением ключа [key] падает на запусках
-     * 2–4 (ddmin repeat=3 → 2/3 упавших; confirmation repeat=5 → 3/5 → UNCONFIRMED).
+     * Victim with a boundary count: under pollution of the key [key] it fails on runs
+     * 2–4 (ddmin repeat=3 → 2/3 failed; confirmation repeat=5 → 3/5 → UNCONFIRMED).
      */
     data class UnconfirmedVictim(override val name: String, val key: String) : Scenario
 
-    /** Параметризованный тест — записывается display-именами «check(int)[N]» (для UNSUPPORTED). */
+    /** Parameterized test — recorded under the display names "check(int)[N]" (for UNSUPPORTED). */
     data class Parameterized(override val name: String) : Scenario
 }
 
-/** Сгенерированный тестовый класс fixture-проекта. */
+/** A generated test class of the fixture project. */
 data class GeneratedClass(val scenario: Scenario, val className: String, val methods: List<String>)
 
-/** Сгенерированный fixture-проект: корень [dir] + классы в записанном порядке. */
+/** A generated fixture project: the [dir] root + the classes in the recorded order. */
 data class Fixture(val dir: Path, val classes: List<GeneratedClass>) {
     fun reportsDir(): Path = dir.resolve("target").resolve("surefire-reports")
 }
@@ -102,11 +102,11 @@ private fun renderBody(scenario: Scenario, className: String): String = when (sc
 }
 
 /**
- * Генерирует мини-Maven проект (план Task 4.1): pom + PollutionState + по классу
- * на сценарий, в чистой Java. Классы называются T<NN>_<Name>Test — записанный
- * порядок прогона совпадает с порядком [scenarios]; равенство алфавитному порядку
- * обеспечивает surefire `runOrder=alphabetical` в pom-шаблоне (дефолт filesystem
- * платформо-зависим: на Linux порядок произвольный — упало на CI, 2026-09-29).
+ * Generates a mini Maven project (plan Task 4.1): a pom + PollutionState + one class
+ * per scenario, in plain Java. The classes are named T<NN>_<Name>Test — the recorded
+ * run order matches the order of [scenarios]; equality with the alphabetical order
+ * is ensured by surefire `runOrder=alphabetical` in the pom template (the filesystem
+ * default is platform-dependent: on Linux the order is arbitrary — failed on CI, 2026-09-29).
  */
 fun generateFixture(dir: Path, scenarios: List<Scenario>): Fixture {
     val packageDir = FIXTURE_PACKAGE.split('.').fold(sourcesRoot(dir)) { acc, part -> acc.resolve(part) }

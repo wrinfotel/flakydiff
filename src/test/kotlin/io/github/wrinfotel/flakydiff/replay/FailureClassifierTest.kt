@@ -5,9 +5,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 /**
- * Правила спеки §4.2 (блокирующие): BEFORE_* и ENGINE — всегда InfraError;
- * NoClassDefFoundError / ClassNotFoundException — InfraError из любой стадии
- * (сломанный classpath, не логика); остальное из stage=TEST — TestFailure.
+ * Spec rules §4.2 (blocking): BEFORE_* and ENGINE — always InfraError;
+ * NoClassDefFoundError / ClassNotFoundException — InfraError from any stage
+ * (broken classpath, not logic); everything else from stage=TEST — TestFailure.
  */
 class FailureClassifierTest {
 
@@ -22,12 +22,12 @@ class FailureClassifierTest {
             arrayOf("ENGINE", "org.junit.platform.JUnitException", FailureKind.INFRA_ERROR),
             arrayOf("TEST", "java.lang.NoClassDefFoundError", FailureKind.INFRA_ERROR),
             arrayOf("TEST", "java.lang.ClassNotFoundException", FailureKind.INFRA_ERROR),
-            // маркер watchdog'а ReplayMain (спека: victim-timeout -> InfraError):
+            // ReplayMain watchdog marker (spec: victim-timeout -> InfraError):
             arrayOf("TEST", "flakydiff.victim-timeout", FailureKind.INFRA_ERROR),
-            // из любой стадии, независимо от BEFORE-правила:
+            // from any stage, regardless of the BEFORE rule:
             arrayOf("BEFORE_EACH", "java.lang.NoClassDefFoundError", FailureKind.INFRA_ERROR),
             arrayOf("ENGINE", "java.lang.ClassNotFoundException", FailureKind.INFRA_ERROR),
-            // стадия неизвестна — решает тип:
+            // stage unknown — the type decides:
             arrayOf(null as String?, "java.lang.NoClassDefFoundError", FailureKind.INFRA_ERROR),
             arrayOf(null as String?, "java.lang.AssertionError", FailureKind.TEST_FAILURE),
         )

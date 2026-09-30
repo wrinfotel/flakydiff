@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Шаг 0 ddmin (план Task 3.2, спека §4.3): жертва изолированно (без prefix) —
- * все 4 ветки на детерминированном fake-harness.
+ * Step 0 of ddmin (plan Task 3.2, spec §4.3): victim in isolation (no prefix) —
+ * all 4 branches on a deterministic fake harness.
  */
 class DiagnoserTest {
 
@@ -18,7 +18,7 @@ class DiagnoserTest {
     fun `victim passes isolated - proceed to step 1`() {
         val h = FakeHarness.fromBooleans(listOf(false, false, false), victim)
         assertEquals(Step0Result.Isolated, step0(h, victim))
-        // зонд шага 0 — БЕЗ prefix (изоляция), repeat по умолчанию 3
+        // step 0 probe — no prefix (isolation), repeat defaults to 3
         val call = h.calls.single()
         assertEquals(emptyList<TestRef>(), call.prefix)
         assertEquals(victim, call.victim)
@@ -27,7 +27,7 @@ class DiagnoserTest {
 
     @Test
     fun `victim 1 of 3 isolated - NOT_ISOLATED with unstable flag`() {
-        // «2/3 прошло» = WEAK → флаг victim_unstable_in_isolation (флаг ⟺ WEAK по построению)
+        // "2/3 passed" = WEAK → the victim_unstable_in_isolation flag (flag ⟺ WEAK by construction)
         val h = FakeHarness.fromBooleans(listOf(true, false, false), victim)
         assertEquals(Step0Result.NotIsolated(victimUnstableInIsolation = true), step0(h, victim))
     }
@@ -52,8 +52,8 @@ class DiagnoserTest {
 }
 
 /**
- * Шаг 1 ddmin (план Task 3.3, спека §4.3): полный prefix + жертва обязана падать —
- * иначе NOT_REPRODUCED (вероятны race/время — вне v1).
+ * Step 1 of ddmin (plan Task 3.3, spec §4.3): the full prefix plus the victim must fail —
+ * otherwise NOT_REPRODUCED (likely race/timing — out of scope for v1).
  */
 class Step1Test {
 
@@ -71,7 +71,7 @@ class Step1Test {
             else ReplayResult.NotReproduced(rep, rep)
         }
         assertEquals(Step1Result.ReproducedWithFullPrefix(failures = 3, attempts = 3), step1(h, prefix, victim))
-        // зонд шага 1 — именно полный prefix + жертва
+        // step 1 probe — exactly the full prefix plus the victim
         assertEquals(prefix, h.calls.single().prefix)
         assertEquals(3, h.calls.single().repeat)
     }
@@ -96,21 +96,21 @@ class Step1Test {
 }
 
 /**
- * Полный пайплайн diagnose (план Task 3.5, спека §4.3): step0 → step1 → ddmin →
- * fresh-process confirmation (repeat=5, критерий сознательно строже ddmin — ≥4 из 5).
+ * The full diagnose pipeline (plan Task 3.5, spec §4.3): step0 → step1 → ddmin →
+ * fresh-process confirmation (repeat=5, the criterion is deliberately stricter than ddmin — ≥4 of 5).
  */
 class DiagnoseTest {
 
     private val victim = TestRef("com.example.VictimTest", "flaky")
     private val failure = io.github.wrinfotel.flakydiff.reader.TestFailure("java.lang.AssertionError", "boom", null)
 
-    /** step0 проходит, step1 и ddmin видят polluter, confirmation (repeat=5) задаёт сценарий. */
+    /** step0 passes, step1 and ddmin see the polluter, confirmation (repeat=5) sets the scenario. */
     private fun harnessWithConfirmation(confirmation: ReplayResult, polluter: TestRef): FakeHarness =
         FakeHarness { p, v, rep ->
             check(v == victim)
             when {
-                rep == 5 -> confirmation // единственный вызов с repeat=5 — confirmation
-                p.isEmpty() -> ReplayResult.NotReproduced(3, 3) // step0: изолированно проходит
+                rep == 5 -> confirmation // the only call with repeat=5 — confirmation
+                p.isEmpty() -> ReplayResult.NotReproduced(3, 3) // step0: passes in isolation
                 polluter in p -> ReplayResult.Reproduced(rep, rep, failure)
                 else -> ReplayResult.NotReproduced(rep, rep)
             }
@@ -202,8 +202,8 @@ class DiagnoseTest {
 
     @Test
     fun `parameterized victim - UNSUPPORTED before any probe`() {
-        // display-name invocation из recorded XML (параметризованный тест):
-        // v1 не умеет повторять отдельный invocation — честный отказ ДО зондов
+        // display-name invocation from the recorded XML (parameterized test):
+        // v1 cannot replay an individual invocation — an honest refusal BEFORE any probes
         val paramVictim = TestRef("com.example.ParamTest", "check(int)[1]")
         val h = FakeHarness { _, _, _ -> error("probe must not run for UNSUPPORTED") }
 

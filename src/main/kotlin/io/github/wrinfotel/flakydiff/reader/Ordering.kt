@@ -13,24 +13,24 @@ data class ReadResult(
     val forksPossible: Boolean = true,
 )
 
-/** Опции чтения отчётов. sequential — аналог флага --sequential (null = не передан);
- *  noForks — аналог --no-forks (форки в XML не детектятся, честный флаг). */
+/** Report reading options. sequential mirrors the --sequential flag (null = not passed);
+ *  noForks mirrors --no-forks (forks are not detectable in XML, hence the honest flag). */
 data class ReadOptions(val sequential: Boolean? = null, val noForks: Boolean = false)
 
 private const val GRANULARITY_MS = 1000L
 
-/** Итоговый API reader'а: директория XML-отчётов → ReadResult. */
+/** The reader's top-level API: a directory of XML reports → ReadResult. */
 fun readReports(dir: Path, options: ReadOptions = ReadOptions()): ReadResult =
     readDirectoryImpl(dir, options.sequential).copy(forksPossible = !options.noForks)
 
-/** Внутренний шаг к readReports (Task 1.4), оставлен для совместимости. */
+/** An internal step toward readReports (Task 1.4), kept for compatibility. */
 fun readDirectory(dir: Path, sequential: Boolean?): ReadResult =
     readDirectoryImpl(dir, sequential)
 
-/** Читает директорию XML-отчётов и восстанавливает порядок классов.
- *  Семантика `sequential` (спека §4.1, блокирующее правило):
- *  null/false → order_unreliable=true всегда; true снимает флаг только при
- *  источнике TIMESTAMP без срабатывания эвристики недостоверности. */
+/** Reads a directory of XML reports and recovers the class order.
+ *  Semantics of `sequential` (spec §4.1, blocking rule):
+ *  null/false → order_unreliable=true always; true clears the flag only when
+ *  the source is TIMESTAMP and the unreliability heuristic did not trigger. */
 private fun readDirectoryImpl(dir: Path, sequential: Boolean?): ReadResult {
     val xmlFiles = Files.list(dir).use { stream ->
         stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".xml") }
@@ -65,7 +65,7 @@ private fun readDirectoryImpl(dir: Path, sequential: Boolean?): ReadResult {
         }
     }
 
-    // один класс может быть в нескольких файлах — берём самый ранний старт
+    // one class may appear in several files — take the earliest start
     val classStarts = LinkedHashMap<String, Long>()
     val classExact = HashMap<String, Boolean>()
     for (t in timings) {

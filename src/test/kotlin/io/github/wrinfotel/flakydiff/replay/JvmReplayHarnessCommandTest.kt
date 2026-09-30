@@ -10,8 +10,8 @@ import org.junit.platform.launcher.core.LauncherFactory
 import java.nio.file.Path
 
 /**
- * Сборка команды зонда без запуска JVM (unit-скорость): формулы таймаутов,
- * argLine, classpath, прокидывание свойств effective-pom.
+ * Probe command assembly without launching a JVM (unit speed): timeout formulas,
+ * argLine, classpath, propagation of effective-pom properties.
  */
 class JvmReplayHarnessCommandTest {
 
@@ -61,7 +61,7 @@ class JvmReplayHarnessCommandTest {
 
     @Test
     fun `victim timeout is xml duration x5 clamped`() {
-        // спека §4.2: victimTimeout = clamp(duration×5, 30s, 180s) — умножение ОДИН раз
+        // spec §4.2: victimTimeout = clamp(duration×5, 30s, 180s) — multiplied ONCE
         val h = harness(durationsMs = mapOf(statefulVictim to 10_000))
 
         val cmd = h.buildCommand(listOf(polluter), statefulVictim, 3, Path.of("r.json"))
@@ -71,7 +71,7 @@ class JvmReplayHarnessCommandTest {
 
     @Test
     fun `victim timeout x5 stays inside clamp bounds`() {
-        // 60s × 5 = 300s → потолок 180s; 100ms × 5 = 0.5s → пол 30s
+        // 60s × 5 = 300s → hits the 180s ceiling; 100ms × 5 = 0.5s → hits the 30s floor
         val over = harness(durationsMs = mapOf(statefulVictim to 60_000))
             .buildCommand(listOf(polluter), statefulVictim, 3, Path.of("r.json"))
         assertEquals("180", over[over.indexOf("--victim-timeout") + 1])
@@ -92,8 +92,8 @@ class JvmReplayHarnessCommandTest {
 
     @Test
     fun `argLine quoted token with spaces stays one JVM argument`() {
-        // javaagent с пробелом в пути — типичный jacoco/агент на Windows; ProcessBuilder
-        // передаёт токены без shell: кавычки съедает токенизатор, пробел остаётся внутри
+        // javaagent with a space in the path — a typical jacoco/agent on Windows; ProcessBuilder
+        // passes tokens without a shell: the tokenizer eats the quotes, the space stays inside
         val h = harness(argLine = """-javaagent:"C:\Program Files\agent.jar" -Xmx512m""")
 
         val cmd = h.buildCommand(listOf(polluter), statefulVictim, 3, Path.of("r.json"))
@@ -114,8 +114,8 @@ class JvmReplayHarnessCommandTest {
 
     @Test
     fun `activated profiles go into probe environment`() {
-        // спека §4.2: «activated profiles → env»; эффекты профилей на pom уже
-        // интерполированы в effective-pom — это канал для тестов, читающих окружение
+        // spec §4.2: "activated profiles → env"; the profile effects on the pom are already
+        // interpolated in the effective-pom — this is a channel for tests reading the environment
         assertEquals(
             mapOf("MAVEN_ACTIVE_PROFILES" to "ci,db"),
             harness(profiles = listOf("ci", "db")).probeEnvironment(),
@@ -125,8 +125,8 @@ class JvmReplayHarnessCommandTest {
 
     @Test
     fun `buildCommand - class-level prefix ref renders fqcn without hash`() {
-        // repro-команда вердикта (Task 5.1) допускает polluter-записи БЕЗ #method
-        // (replay запускает весь класс): «FQCN#» ломало бы команду зонда.
+        // the verdict's repro command (Task 5.1) allows polluter entries WITHOUT #method
+        // (replay runs the whole class): "FQCN#" would break the probe command.
         val cmd = harness().buildCommand(
             listOf(TestRef("com.example.PolluterTest", "")),
             statefulVictim, 3, Path.of("report.json"),
@@ -137,7 +137,7 @@ class JvmReplayHarnessCommandTest {
 
     @Test
     fun `command puts project classpath first and probe cp last`() {
-        // блокирующее правило спеки §4.2: classpath проекта ПЕРВЫМ, replay-jar ПОСЛЕДНИМ
+        // blocking rule of spec §4.2: the project classpath FIRST, the replay-jar LAST
         val cmd = harness().buildCommand(listOf(polluter), statefulVictim, 3, Path.of("dummy-report.json"))
 
         val cp = cmd[cmd.indexOf("-cp") + 1]
@@ -157,7 +157,7 @@ class JvmReplayHarnessCommandTest {
         )
         assertEquals("3", cmd[cmd.indexOf("--repeat") + 1])
         assertEquals(Path.of("dummy-report.json").toString(), cmd[cmd.indexOf("--report") + 1])
-        // durations пусты -> clamp(x*5, 30s, 180s) даёт нижнюю границу 30s
+        // durations are empty -> clamp(x*5, 30s, 180s) yields the 30s lower bound
         assertEquals("30", cmd[cmd.indexOf("--victim-timeout") + 1])
     }
 }

@@ -31,9 +31,9 @@ class ReadReportsTest {
 
     companion object {
         // (sequential, hasTimestamp, noForks, expected order_unreliable)
-        // контракт Task 1.4 п.4: без --sequential флаг true в каждой ячейке;
-        // true снимает флаг только при TIMESTAMP без срабатывания эвристики;
-        // false — флаг всегда.
+        // contract of Task 1.4 item 4: without --sequential the flag is true in every cell;
+        // true clears the flag only for TIMESTAMP without the heuristic firing;
+        // false — the flag is always set.
         @JvmStatic
         fun cases(): Stream<Arguments> = Stream.of(
             Arguments.of(null, true, false, true),
@@ -67,11 +67,11 @@ class ReadReportsTest {
     ) {
         val base = Instant.parse("2026-09-27T10:00:00Z")
         if (hasTimestamp) {
-            // timestamp ≥1с друг от друга → эвристика <1с не срабатывает
+            // timestamps ≥1s apart → the <1s heuristic does not fire
             write("a-beta.xml", suiteXml("com.acme.BetaTest", timestamp = "2026-09-27T10:00:01Z"))
             write("z-alpha.xml", suiteXml("com.acme.AlphaTest", timestamp = "2026-09-27T10:00:05Z"))
         } else {
-            // start = mtime - time: у Beta mtime раньше на 60с → без timestamp
+            // start = mtime - time: Beta's mtime is 60s earlier → without a timestamp
             write("a-beta.xml", suiteXml("com.acme.BetaTest", timestamp = null), modifiedAt = base.plusSeconds(60))
             write("z-alpha.xml", suiteXml("com.acme.AlphaTest", timestamp = null), modifiedAt = base.plusSeconds(120))
         }

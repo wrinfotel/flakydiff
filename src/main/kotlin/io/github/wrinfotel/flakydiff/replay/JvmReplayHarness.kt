@@ -13,18 +13,18 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
 interface ReplayHarness {
-    /** Каждый вызов = новый процесс (свежая JVM): prefix → victim, repeat повторов жертвы. */
+    /** Each call = a new process (a fresh JVM): prefix → victim, repeat victim repeats. */
     fun replay(prefix: List<TestRef>, victim: TestRef, repeat: Int = 3): ReplayResult
 }
 
 sealed interface ReplayResult {
-    /** Жертва упала ≥2 из repeat. */
+    /** The victim failed ≥2 of repeat. */
     data class Reproduced(val failures: Int, val attempts: Int, val failure: TestFailure) : ReplayResult
 
-    /** Включает 3/3 и 1/3: слабый сигнал консервативно не воспроизведён. */
+    /** Includes 3/3 and 1/3: a weak signal is conservatively treated as not reproduced. */
     data class NotReproduced(val passes: Int, val attempts: Int) : ReplayResult
 
-    /** Компиляция/classpath/JVM/таймаут — НЕ фейл теста (спека §4.2). */
+    /** Compilation/classpath/JVM/timeout — NOT a test failure (spec §4.2). */
     data class InfraError(val cause: String) : ReplayResult
 }
 
@@ -38,14 +38,14 @@ private data class ProbeRow(
 )
 
 /**
- * Свежая JVM на зонд. Classpath проекта ПЕРВЫМ, probeClasspath (в реальном
- * использовании — flakydiff-replay.jar) ПОСЛЕДНИМ: Launcher/движок берутся
- * версии проекта пользователя, shade добирает только отсутствующее.
+ * A fresh JVM per probe. The project classpath FIRST, probeClasspath (in real
+ * use — flakydiff-replay.jar) LAST: the Launcher/engine come from the user
+ * project's versions, shade only picks up what is missing.
  *
- * @param durationsMs длительности тестов из XML-прогонов — для честных таймаутов
- *   (victimTimeout = clamp(duration×5, 30s, 180s), probeTimeout по формуле плана).
- * @param victimTimeoutMs явное перекрытие clamp'а; @param probeTimeoutMs — рамка
- *   на весь процесс зонда (kill по истечении).
+ * @param durationsMs test durations from the XML runs — for honest timeouts
+ *   (victimTimeout = clamp(duration×5, 30s, 180s), probeTimeout per the plan formula).
+ * @param victimTimeoutMs an explicit override of the clamp; @param probeTimeoutMs — the budget
+ *   for the whole probe process (killed on expiry).
  */
 class JvmReplayHarness(
     private val project: MavenProjectInfo,
@@ -90,8 +90,8 @@ class JvmReplayHarness(
             }
 
             val rows = parseReport(report)
-            // Инфра-фейл ЛЮБОЙ строки (prefix или жертва) ломает зонд целиком:
-            // честный InfraError, не фейл теста — иначе ddmin сузит по мусору.
+            // An infra failure in ANY row (prefix or victim) breaks the probe as a whole:
+            // an honest InfraError, not a test failure — otherwise ddmin would narrow on garbage.
             rows.firstOrNull {
                 it.status == "FAILED" &&
                     FailureClassifier.classify(it.stage, it.failureType) == FailureKind.INFRA_ERROR
@@ -124,9 +124,9 @@ class JvmReplayHarness(
     }
 
     /**
-     * Команда зонда: свойства/argLine из effective-pom, cp = target/test-classes +
-     * target/classes + зависимости + probeClasspath последним, затем ReplayMain
-     * с именованными аргументами. Публичная — контракт собираемой команды.
+     * The probe command: properties/argLine from the effective pom, cp = target/test-classes +
+     * target/classes + dependencies + probeClasspath last, then ReplayMain
+     * with named arguments. Public — the contract of the assembled command.
      */
     fun buildCommand(prefix: List<TestRef>, victim: TestRef, repeat: Int, report: Path): List<String> {
         val cp = (
@@ -143,7 +143,7 @@ class JvmReplayHarness(
         cmd.add(cp)
         cmd.add("io.github.wrinfotel.flakydiff.replay.ReplayMain")
         cmd.add("--prefix")
-        // Ссылка без метода = весь класс (форма repro-команды вердикта, контракт Task 2.1)
+        // A reference without a method = the whole class (the verdict repro-command form, Task 2.1 contract)
         cmd.add(
             prefix.joinToString(",") { ref ->
                 if (ref.method.isEmpty()) ref.testClass else "${ref.testClass}#${ref.method}"
@@ -161,9 +161,9 @@ class JvmReplayHarness(
     }
 
     /**
-     * Активированные (activeByDefault) профили → env зонда (спека §4.2 «activated
-     * profiles → env»). Эффекты профилей на pom уже интерполированы в effective-pom —
-     * это канал для тестов, ветвящихся на окружение прогона.
+     * Activated (activeByDefault) profiles → the probe env (spec §4.2 "activated
+     * profiles → env"). The profiles' effects on the pom are already interpolated into the
+     * effective pom — this is a channel for tests that branch on the run environment.
      */
     internal fun probeEnvironment(): Map<String, String> =
         if (project.profiles.isEmpty()) {
@@ -203,21 +203,21 @@ class JvmReplayHarness(
     }
 }
 
-/** Пол clamp-рамки повтора жертвы; он же дефолт replay без XML-длительностей. */
+/** The floor of the victim-repeat clamp budget; also the replay default without XML durations. */
 internal const val VICTIM_TIMEOUT_FLOOR_SEC = 30L
 
-/** clamp(duration×5, 30s, 180s) — честная рамка, без псевдостатистики (спека §4.2). */
+/** clamp(duration×5, 30s, 180s) — an honest budget, no pseudo-statistics (spec §4.2). */
 internal fun clampVictimTimeoutMs(durationMs: Long): Long =
     (durationMs * 5).coerceIn(VICTIM_TIMEOUT_FLOOR_SEC * 1_000, 180_000)
 
-/** Итоговая рамка повтора жертвы в секундах: явный override важнее clamp'а длительности. */
+/** The final victim-repeat budget in seconds: an explicit override beats the duration clamp. */
 internal fun effectiveVictimTimeoutSec(durationMs: Long?, overrideSec: Long?): Long =
     ((overrideSec?.times(1_000) ?: clampVictimTimeoutMs(durationMs ?: 0L)) + 999) / 1_000
 
 /**
- * argLine — строка аргументов JVM, а не shell-команда: ProcessBuilder передаёт токены
- * напрямую, без шелл-разбора. Двойные кавычки группируют пробелы внутри одного
- * аргумента (javaagent с путём «C:\Program Files\...»), `\"` — литеральная кавычка.
+ * argLine is a JVM argument string, not a shell command: ProcessBuilder passes the tokens
+ * directly, with no shell parsing. Double quotes group spaces into a single
+ * argument (a javaagent with a path like "C:\Program Files\..."), `\"` is a literal quote.
  */
 internal fun splitArgLine(argLine: String): List<String> {
     val tokens = mutableListOf<String>()

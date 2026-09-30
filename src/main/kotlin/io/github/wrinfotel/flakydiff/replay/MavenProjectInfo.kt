@@ -9,7 +9,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 data class MvnResult(val exitCode: Int, val output: String = "")
 
-/** Точка подмены mvn в тестах (план Task 2.4: фейковая обёртка со счётчиком вызовов). */
+/** mvn substitution point in tests (plan Task 2.4: a fake wrapper with a call counter). */
 fun interface MvnRunner {
     fun run(projectDir: Path, args: List<String>): MvnResult
 }
@@ -18,14 +18,14 @@ data class MavenProjectInfo(
     val projectDir: Path,
     val testClassesDir: Path,
     val classesDir: Path,
-    /** Только зависимости из build-classpath; target-каталоги рядом отдельными полями. */
+    /** Only dependencies from build-classpath; the target directories alongside are separate fields. */
     val classpathEntries: List<Path>,
-    /** Итоговые свойства зонда: systemPropertiesFile + systemPropertyVariables (явные побеждают). */
+    /** The probe's final properties: systemPropertiesFile + systemPropertyVariables (explicit ones win). */
     val systemProperties: Map<String, String>,
-    /** argLine после второго прохода интерполяции: сырые @{...}/${...} вырезаны с warning. */
+    /** argLine after the second interpolation pass: raw @{...}/${...} are cut out with a warning. */
     val argLine: String?,
     val systemPropertiesFile: String?,
-    /** Профили с activeByDefault=true из effective-pom. */
+    /** Profiles with activeByDefault=true from the effective pom. */
     val profiles: List<String>,
     val warnings: List<String>,
 )
@@ -38,17 +38,17 @@ private data class SurefireConfig(
 )
 
 /**
- * Готовит чужой Maven-проект к зондам (спека §4.2):
- * 1. `-q test-compile dependency:build-classpath -Dmdep.outputFile=...` — оба шага
- *    обязательны, stdout не парсится, файл — источник истины;
- * 2. target/test-classes + target/classes добавляются руками (build-classpath их
- *    не включает);
- * 3. `help:effective-pom` → конфигурация surefire: systemPropertyVariables,
- *    argLine, systemPropertiesFile, активированные (activeByDefault) профили;
- * 4. argLine — второй проход интерполяции: сырые @{...}/${...} вырезаются с warning;
- * 5. classpath-файл и effective.xml кэшируются по SHA-256 всех pom реактора;
- *    test-compile выполняется ВСЕГДА (classpath от тестов не зависит, но их
- *    компиляция кэшироваться не должна — иначе e2e ломается на свежих тестах).
+ * Prepares a foreign Maven project for probes (spec §4.2):
+ * 1. `-q test-compile dependency:build-classpath -Dmdep.outputFile=...` — both steps
+ *    are mandatory, stdout is not parsed, the file is the source of truth;
+ * 2. target/test-classes + target/classes are added manually (build-classpath does
+ *    not include them);
+ * 3. `help:effective-pom` → the surefire configuration: systemPropertyVariables,
+ *    argLine, systemPropertiesFile, activated (activeByDefault) profiles;
+ * 4. argLine — a second interpolation pass: raw @{...}/${...} are cut out with a warning;
+ * 5. the classpath file and effective.xml are cached by SHA-256 of all reactor poms;
+ *    test-compile runs ALWAYS (the classpath does not depend on the tests, but their
+ *    compilation must not be cached — otherwise e2e breaks on fresh tests).
  */
 fun prepareProject(
     projectDir: Path,
@@ -100,8 +100,8 @@ fun prepareProject(
         testClassesDir = projectDir.resolve("target").resolve("test-classes"),
         classesDir = projectDir.resolve("target").resolve("classes"),
         classpathEntries = classpathEntries,
-        // Итоговые свойства зонда (спека §4.2): файл + явные systemPropertyVariables,
-        // явные побеждают — так же разрешает приоритеты surefire.
+        // The probe's final properties (spec §4.2): file + explicit systemPropertyVariables,
+        // explicit ones win — the same precedence resolution as surefire.
         systemProperties = fileProps + cfg.systemPropertyVariables,
         argLine = argLine,
         systemPropertiesFile = cfg.systemPropertiesFile,
@@ -111,9 +111,9 @@ fun prepareProject(
 }
 
 /**
- * systemPropertiesFile из конфигурации surefire (спека §4.2): путь относительно
- * basedir проекта (или абсолютный). Нет файла — warning, не крах: остальная
- * конфигурация остаётся валидной.
+ * systemPropertiesFile from the surefire configuration (spec §4.2): a path relative
+ * to the project basedir (or absolute). A missing file is a warning, not a crash:
+ * the rest of the configuration stays valid.
  */
 private fun loadFileProperties(
     projectDir: Path,
@@ -135,7 +135,7 @@ private fun loadFileProperties(
 private val isWindows: Boolean =
     System.getProperty("os.name").lowercase().contains("win")
 
-/** Windows: ProcessBuilder не запускает mvn.cmd напрямую — нужен cmd /c. */
+/** Windows: ProcessBuilder does not launch mvn.cmd directly — cmd /c is needed. */
 internal val defaultMvnCommand: List<String> =
     if (isWindows) listOf("cmd", "/c", "mvn") else listOf("mvn")
 
@@ -158,7 +158,7 @@ private fun stripUnresolvedPlaceholders(argLine: String?): Pair<String?, List<St
     return cleaned.ifEmpty { null } to warnings
 }
 
-/** SHA-256 по всем pom реактора (root + modules рекурсивно). */
+/** SHA-256 over all reactor poms (root + modules recursively). */
 private fun reactorPomsHash(projectDir: Path): String {
     val md = MessageDigest.getInstance("SHA-256")
     reactorPoms(projectDir).forEach { pom ->
@@ -189,10 +189,10 @@ private fun reactorPoms(projectDir: Path): List<Path> {
 private fun parseSurefireConfig(effectivePomFile: Path): SurefireConfig {
     val doc = parseXml(effectivePomFile)
     val plugins = doc.getElementsByTagName("plugin")
-    // В effective-pom секции <profiles> и <build>/<pluginManagement> идут ДО
-    // реального объявления в build/plugins (корпоративные parent-pom, неактивные
-    // профили). Первое совпадение брало чужую конфигурацию: выбор по приоритету
-    // контекста, при равенстве — последнее (младший модуль реактора перекрывает).
+    // In the effective pom the <profiles> and <build>/<pluginManagement> sections come
+    // BEFORE the real declaration in build/plugins (corporate parent poms, inactive
+    // profiles). Taking the first match would pick up someone else's configuration:
+    // select by context priority, and on a tie — the last one (a later reactor module overrides).
     var surefire: Element? = null
     var bestTier = -1
     for (i in 0 until plugins.length) {
@@ -252,10 +252,10 @@ private fun Element.directChild(tag: String): Element? {
 }
 
 /**
- * Приоритет контекста surefire-плагина: 2 — build/plugins (реальная конфигурация
- * выполнения; сюда же effective-pom сливает активные профили), 1 — pluginManagement
- * (дефолты, работают только пока нет своей конфигурации), 0 — секция профиля
- * (неактивный профиль не должен затенять build).
+ * Surefire plugin context priority: 2 — build/plugins (the real execution
+ * configuration; the effective pom also merges activated profiles here), 1 — pluginManagement
+ * (defaults, in effect only while there is no configuration of one's own), 0 — the profiles
+ * section (an inactive profile must not shadow build).
  */
 private fun pluginTier(plugin: Element): Int {
     var inManagement = false

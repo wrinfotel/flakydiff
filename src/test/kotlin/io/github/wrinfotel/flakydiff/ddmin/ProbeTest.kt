@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
- * Бакеты предиката ddmin (план Task 3.1, спека §4.3): считаем УПАВШИЕ повторы жертвы.
- * «2/3 прошло» = WEAK, «1/3 прошло» = FAILS — бакеты однозначны, пересечений нет.
+ * Buckets of the ddmin predicate (plan Task 3.1, spec §4.3): we count FAILED victim replays.
+ * "2/3 passed" = WEAK, "1/3 passed" = FAILS — the buckets are unambiguous, no overlap.
  */
 class ProbeTest {
 
@@ -34,7 +34,7 @@ class ProbeTest {
 
     @Test
     fun `1 of 3 failed is WEAK`() {
-        // «2/3 прошло» = слабый сигнал, консервативно не сужает ddmin
+        // "2/3 passed" = a weak signal, conservatively does not narrow ddmin
         val r = ReplayResult.NotReproduced(2, 3)
         assertEquals(ProbeOutcome.WEAK, classify(r))
     }
@@ -46,9 +46,9 @@ class ProbeTest {
 
     @Test
     fun `threshold is configurable`() {
-        // --min-fail-ratio: threshold=1 → 1/3 упало уже FAILS
+        // --min-fail-ratio: threshold=1 → 1/3 failed is already FAILS
         assertEquals(ProbeOutcome.FAILS, classify(ReplayResult.NotReproduced(2, 3), threshold = 1))
-        // threshold=3 → 2/3 упало ещё WEAK (строгий детерминизм, а не флейк-режим)
+        // threshold=3 → 2/3 failed is still WEAK (strict determinism, not flake mode)
         assertEquals(ProbeOutcome.WEAK, classify(ReplayResult.Reproduced(2, 3, failure), threshold = 3))
         assertEquals(ProbeOutcome.FAILS, classify(ReplayResult.Reproduced(3, 3, failure), threshold = 3))
     }

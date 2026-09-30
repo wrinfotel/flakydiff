@@ -11,9 +11,9 @@ import java.nio.file.Path
 import kotlin.io.path.readText
 
 /**
- * Подмена mvn — записывающий фейк со счётчиком вызовов по подкомандам (план,
- * Task 2.4 п.5): build-classpath пишет cp-файл, help:effective-pom — effective.xml.
- * Файл — источник истины, stdout не парсится.
+ * An mvn stand-in — a recording fake with a per-subcommand call counter (plan,
+ * Task 2.4 item 5): build-classpath writes the cp file, help:effective-pom — effective.xml.
+ * The file is the source of truth; stdout is not parsed.
  */
 class MavenProjectInfoTest {
 
@@ -67,8 +67,8 @@ class MavenProjectInfoTest {
 
         val info = prepareProject(project, cacheDir(), runner)
 
-        // 1 вызов: -q test-compile + dependency:build-classpath (оба шага обязательны);
-        // 2 вызов: help:effective-pom
+        // call 1: -q test-compile + dependency:build-classpath (both steps are required);
+        // call 2: help:effective-pom
         assertEquals(2, runner.calls.size, "calls:\n${runner.calls.joinToString("\n")}")
         assertTrue(runner.calls[0].contains("-q"))
         assertTrue(runner.calls[0].contains("test-compile"))
@@ -80,7 +80,7 @@ class MavenProjectInfoTest {
 
         assertEquals(project.resolve("target").resolve("test-classes"), info.testClassesDir)
         assertEquals(project.resolve("target").resolve("classes"), info.classesDir)
-        // build-classpath отдаёт только зависимости — target-каталоги добавляются руками
+        // build-classpath returns only dependencies — the target directories are added manually
         assertEquals(
             listOf("dep-one.jar", "dep-two.jar").map { cacheDir().resolve(it).toAbsolutePath().normalize() },
             info.classpathEntries,
@@ -109,7 +109,7 @@ class MavenProjectInfoTest {
         val first = prepareProject(project, cacheDir(), runner)
         val second = prepareProject(project, cacheDir(), runner)
 
-        // вызовы: [tc+bc], [eff], [tc] — третий БЕЗ build-classpath и БЕЗ effective-pom
+        // calls: [tc+bc], [eff], [tc] — the third one WITHOUT build-classpath and WITHOUT effective-pom
         assertEquals(3, runner.calls.size, "calls:\n${runner.calls.joinToString("\n")}")
         assertTrue(runner.calls[2].contains("test-compile"))
         assertTrue(!runner.calls[2].contains("dependency:build-classpath"))
@@ -129,7 +129,7 @@ class MavenProjectInfoTest {
             Files.readString(project.resolve("pom.xml")).replace("<version>1.0</version>", "<version>1.1</version>"))
         prepareProject(project, cacheDir(), runner)
 
-        // [tc+bc], [eff], [tc+bc], [eff] — хэш poms сменился, кэш промахнулся
+        // [tc+bc], [eff], [tc+bc], [eff] — the pom hash changed, the cache missed
         assertEquals(4, runner.calls.size, "calls:\n${runner.calls.joinToString("\n")}")
         assertTrue(runner.calls[2].contains("dependency:build-classpath"))
         assertTrue(runner.calls[3].contains("help:effective-pom"))
@@ -145,7 +145,7 @@ class MavenProjectInfoTest {
         assertTrue(ex.message!!.contains("boom-stderr-tail"), "message: ${ex.message}")
     }
 
-    /** Спека §4.2 (блокирующее): systemPropertiesFile обязан доходить до зондов. */
+    /** Spec §4.2 (blocking): systemPropertiesFile must reach the probes. */
     private fun effectivePomWithVars(): String = """
         <project xmlns="http://maven.apache.org/POM/4.0.0">
           <modelVersion>4.0.0</modelVersion>
@@ -218,8 +218,8 @@ class MavenProjectInfoTest {
 
     @Test
     fun `build plugins surefire wins over earlier profile declaration`() {
-        // effective-pom держит секцию profiles ДО build: неактивный профиль с
-        // surefire-конфигом не должен затенять реальную конфигурацию выполнения
+        // effective-pom keeps the profiles section BEFORE build: an inactive profile with
+        // a surefire config must not shadow the real execution configuration
         val xml = pomXml(
             """
             <profiles>
@@ -239,7 +239,7 @@ class MavenProjectInfoTest {
 
     @Test
     fun `build plugins surefire wins over pluginManagement`() {
-        // pluginManagement (корпоративные parent-pom) идёт перед build/plugins
+        // pluginManagement (corporate parent-poms) comes before build/plugins
         val xml = pomXml(
             """
             <build>

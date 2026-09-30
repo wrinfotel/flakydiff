@@ -6,8 +6,8 @@ import io.github.wrinfotel.flakydiff.replay.ReplayHarness
 import io.github.wrinfotel.flakydiff.replay.ReplayResult
 
 /**
- * Детерминированный fake-harness для unit-тестов ddmin (план Task 3.2):
- * каждый вызов фиксируется, отклик задаётся лямбдой — никаких JVM.
+ * Deterministic fake harness for the ddmin unit tests (plan Task 3.2):
+ * every call is recorded, the response is given by a lambda — no JVMs.
  */
 internal class FakeHarness(
     private val results: (prefix: List<TestRef>, victim: TestRef, repeat: Int) -> ReplayResult,
@@ -25,7 +25,7 @@ internal class FakeHarness(
     companion object {
         private val FAILURE = TestFailure("java.lang.AssertionError", "boom", null)
 
-        /** true = повтор жертвы упал. ≥2 упавших → Reproduced, иначе NotReproduced (как JvmReplayHarness). */
+        /** true = a victim replay failed. ≥2 failures → Reproduced, otherwise NotReproduced (as JvmReplayHarness). */
         fun fromBooleans(outcomes: List<Boolean>, victim: TestRef): FakeHarness = FakeHarness { _, v, _ ->
             check(v == victim) { "unexpected victim probe: $v" }
             val failures = outcomes.count { it }

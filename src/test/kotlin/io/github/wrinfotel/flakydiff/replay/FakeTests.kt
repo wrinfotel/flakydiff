@@ -6,14 +6,14 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 /**
- * Фиктивные тестовые классы для запуска ReplayMain в свежей JVM (Task 2.1).
- * Имена НЕ должны попадать под include-паттерны surefire (Test*, *Test, *Tests,
- * *TestCase), иначе они начнут выполняться в собственном прогоне модуля.
+ * Dummy test classes for running ReplayMain in a fresh JVM (Task 2.1).
+ * The names must NOT match the surefire include patterns (Test*, *Test, *Tests,
+ * *TestCase), or they will start running in the module's own run.
  */
 class FakePassing {
     @Test
     fun alwaysPasses() {
-        // ничего не делает
+        // does nothing
     }
 }
 
@@ -32,19 +32,19 @@ class FakeBeforeEachFails {
 
     @Test
     fun neverRuns() {
-        // не должен выполниться: BeforeEach падает раньше
+        // must not run: BeforeEach fails first
     }
 }
 
 class FakeTwoMethods {
     @Test
     fun first() {
-        // ничего не делает
+        // does nothing
     }
 
     @Test
     fun second() {
-        // ничего не делает
+        // does nothing
     }
 }
 
@@ -52,6 +52,6 @@ class FakeParamMethod {
     @ParameterizedTest
     @ValueSource(ints = [1, 2, 3])
     fun check(value: Int) {
-        // ничего не делает: важен сам набор display-name invocations
+        // does nothing: only the set of display-name invocations matters
     }
 }

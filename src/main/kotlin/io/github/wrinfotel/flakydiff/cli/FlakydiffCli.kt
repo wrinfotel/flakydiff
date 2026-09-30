@@ -29,10 +29,10 @@ import java.util.concurrent.Callable
 import kotlin.system.exitProcess
 
 /**
- * CLI flakydiff (план Task 5.3): diagnose / replay / report. `--project` обязателен
- * у diagnose и replay: из него prepareProject строит classpath зондов; проект
- * готовится ОДИН раз на запуск. Каждый зонд = свежая JVM; стоимость митигируется
- * флагами diagnose — текст митигации продублирован в описании команды (--help).
+ * flakydiff CLI (plan Task 5.3): diagnose / replay / report. `--project` is required
+ * for diagnose and replay: prepareProject builds the probe classpath from it; the
+ * project is prepared ONCE per run. Each probe = a fresh JVM; the cost is mitigated
+ * by the diagnose flags — the mitigation text is duplicated in the command description (--help).
  */
 @Command(
     name = "flakydiff",
@@ -54,14 +54,14 @@ class FlakydiffCli : Callable<Int> {
     }
 }
 
-/** Точка входа дистрибуции: Main-Class = FlakydiffCliKt (top-level main). */
+/** Distribution entry point: Main-Class = FlakydiffCliKt (top-level main). */
 fun main(args: Array<String>) {
     exitProcess(CommandLine(FlakydiffCli()).execute(*args))
 }
 
 private const val DEFAULT_REPEAT = 3
 
-/** Жертва/метод: FQCN#method. Ссылка без '#' допустима только для prefix (весь класс). */
+/** Victim/method: FQCN#method. A reference without '#' is allowed only for prefix (a whole class). */
 private fun parseRef(s: String): TestRef? {
     val idx = s.indexOf('#')
     if (idx <= 0 || idx == s.length - 1) return null
@@ -69,9 +69,10 @@ private fun parseRef(s: String): TestRef? {
 }
 
 /**
- * probeClasspath: flakydiff-*-replay.jar рядом с текущим jar (дистрибуция, Task 5.4).
- * В dev-запусках (классы из target/) его нет — берём classpath текущего процесса:
- * ReplayMain доступен, порядок «classpath проекта первым» соблюдён харнессом.
+ * probeClasspath: flakydiff-*-replay.jar next to the current jar (distribution, Task 5.4).
+ * In dev runs (classes from target/) it is absent — the current process's classpath is
+ * used instead: ReplayMain is available, and the "project classpath first" order is
+ * upheld by the harness.
  */
 private fun probeClasspath(): List<Path> {
     val here = Path.of(FlakydiffCli::class.java.protectionDomain.codeSource.location.toURI())
@@ -215,9 +216,9 @@ open class DiagnoseCommand : Callable<Int> {
     }
 
     /**
-     * Точка подмены в тестах (unit-скорость, без mvn/JVM — план Task 5.3). В проде:
-     * prepareProject (classpath-кэш по SHA-256(pom) в target/flakydiff-cache) +
-     * JvmReplayHarness с таймаутами из длительностей XML.
+     * Substitution point in tests (unit speed, no mvn/JVM — plan Task 5.3). In production:
+     * prepareProject (classpath cache keyed by SHA-256(pom) in target/flakydiff-cache) +
+     * JvmReplayHarness with timeouts derived from the XML durations.
      */
     protected open fun buildHarness(durationsMs: Map<TestRef, Long>): ReplayHarness {
         val info = prepareProject(absProject(), absProject().resolve("target/flakydiff-cache"))
@@ -232,15 +233,15 @@ open class DiagnoseCommand : Callable<Int> {
     }
 
     /**
-     * --project обязан быть абсолютным ДО prepareProject: mvn пишет classpath-файл
-     * (-Dmdep.outputFile) относительно СВОЕЙ cwd (= директории проекта), а код
-     * ищет его по исходному пути — относительный путь давал бы несовпадение.
+     * --project must be absolute BEFORE prepareProject: mvn writes the classpath file
+     * (-Dmdep.outputFile) relative to ITS OWN cwd (= the project directory), while the
+     * code looks it up by the original path — a relative path would cause a mismatch.
      */
     private fun absProject(): Path = project.toAbsolutePath().normalize()
 
     private fun verdictContext(read: ReadResult, victimRef: TestRef, durations: Map<TestRef, Long>): VerdictContext {
-        // Фактическая рамка диагностики выше пола 30s → repro обязан нести её с собой:
-        // replay без XML-длительностей взял бы пол и убил повторы медленной жертвы.
+        // The actual diagnosis budget is above the 30s floor → the repro must carry it along:
+        // a replay without XML durations would take the floor and kill the repeats of a slow victim.
         val vtSec = effectiveVictimTimeoutSec(durations[victimRef], victimTimeoutSec)
         return VerdictContext(
             projectDir = absProject().toString(),
@@ -331,8 +332,8 @@ open class ReplayCommand : Callable<Int> {
             val idx = line.indexOf('#')
             if (idx <= 0) TestRef(line, "") else TestRef(line.substring(0, idx), line.substring(idx + 1))
         }
-        // Любая неудача подготовки/зонда — честная строка в stderr и код 2
-        // (инфра/ошибка по контракту команды), не сырой stack trace.
+        // Any preparation/probe failure is an honest stderr line and exit code 2
+        // (infra/error per the command contract), not a raw stack trace.
         return try {
             when (val r = buildHarness().replay(prefixRefs, victimRef, repeat)) {
                 is ReplayResult.Reproduced -> {

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Быстрый тест генератора: раскладка и подстановка плейсхолдеров, без Maven. */
+/** Quick generator test: layout and placeholder substitution, without Maven. */
 class FixtureProjectLayoutTest {
 
     @TempDir

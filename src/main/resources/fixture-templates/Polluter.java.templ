@@ -2,14 +2,14 @@ package io.github.wrinfotel.fixture;
 
 import org.junit.jupiter.api.Test;
 
-/** Polluter: грязнит ключ «{{KEY}}», который читает жертва. */
+/** Polluter: pollutes the "{{KEY}}" key that the victim reads. */
 public class {{NAME}} {
 
     @Test
     void pollutes() throws InterruptedException {
-        // Не меньше ~50 мс: reader восстанавливает порядок классов по mtime − сумма
-        // длительностей теста; у слишком быстрого polluter'а оценка старта сливается
-        // с соседним классом и джиттер записи XML инвертирует смежный порядок.
+        // At least ~50 ms: the reader recovers the class order as mtime − the sum of
+        // test durations; for a too-fast polluter the start estimate merges with the
+        // neighboring class and the XML write jitter inverts the contiguous order.
         Thread.sleep(100);
         PollutionState.pollute("{{KEY}}");
     }

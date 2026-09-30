@@ -2,7 +2,7 @@ package io.github.wrinfotel.flakydiff.reader
 
 import kotlinx.serialization.Serializable
 
-/** Ссылка на тест: FQCN класса + имя метода. @Serializable — вердикт уходит в JSON (Task 5.2). */
+/** A reference to a test: the class FQCN + the method name. @Serializable — the verdict goes into JSON (Task 5.2). */
 @Serializable
 data class TestRef(val testClass: String, val method: String)
 
@@ -21,9 +21,9 @@ data class TestRun(val entries: List<TestExecution>, val markedFlaky: Set<TestRe
 
 data class ReaderError(val message: String, val cause: String? = null)
 
-/** Результат разбора одного XML-файла: по записи на testcase, rerun-элементы отдельно.
- *  timestamps — точные старты testcase (surefire ≥3.5.5 reportTestTimestamp);
- *  suiteTimestampMs — атрибут timestamp на уровне testsuite (фолбэк для класса). */
+/** The result of parsing one XML file: an entry per testcase, rerun elements tracked separately.
+ *  timestamps — the exact testcase start times (surefire ≥3.5.5 reportTestTimestamp);
+ *  suiteTimestampMs — the timestamp attribute at the testsuite level (a fallback for the class). */
 data class ParsedFile(
     val entries: List<TestExecution>,
     val markedFlaky: Set<TestRef>,
@@ -32,8 +32,8 @@ data class ParsedFile(
 )
 
 /**
- * Склеивает разобранные файлы в прогон: (class, method) встречается один раз —
- * берём первый прогон (без dedup жертва станет предшественником самой себя).
+ * Merges the parsed files into a run: a (class, method) pair must occur only once —
+ * the first run is kept (without dedup the victim would become its own predecessor).
  */
 fun buildTestRun(files: List<ParsedFile>): TestRun {
     val seen = mutableSetOf<TestRef>()

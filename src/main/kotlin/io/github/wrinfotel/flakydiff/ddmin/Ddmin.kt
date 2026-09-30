@@ -5,18 +5,18 @@ import io.github.wrinfotel.flakydiff.reader.TestRef
 import io.github.wrinfotel.flakydiff.replay.ReplayHarness
 import io.github.wrinfotel.flakydiff.replay.ReplayResult
 
-/** Результат ddmin (план Task 3.4, спека §4.3). */
+/** The result of ddmin (plan Task 3.4, spec §4.3). */
 sealed interface DdminResult {
     /**
-     * 1-minimal (или плато) множество предшественников в записанном порядке.
-     * [lastFailure] — фейл последнего FAIL-зонда (для диагностики вердикта).
+     * A 1-minimal (or plateau) set of predecessors in the recorded order.
+     * [lastFailure] — the failure of the last FAIL probe (for verdict diagnostics).
      */
     data class Minimized(val polluters: List<TestRef>, val lastFailure: TestFailure?) : DdminResult
 
     /**
-     * Два InfraError подряд на одном зонде. Результат ddmin ОТБРАСЫВАЕТСЯ:
-     * вердикт не содержит ни polluters, ни repro-команды — только диагностику
-     * («чинить окружение, не тест»); сужение по инфра-фейлу не производится.
+     * Two InfraErrors in a row on the same probe. The ddmin result is DISCARDED:
+     * the verdict contains neither polluters nor a repro command — only the diagnostics
+     * ("fix the environment, not the test"); no narrowing is performed on an infra failure.
      */
     data class InfraBroken(val cause: String) : DdminResult
 }
@@ -27,18 +27,18 @@ private sealed interface ProbeAttempt {
 }
 
 /**
- * ddmin по чанкам: классический delta debugging по множеству предшественников.
- * Адаптация: элементы нельзя переупорядочивать — чанки берутся подряд в записанном
- * порядке, комплементы сохраняют порядок (проверяется тестом).
+ * ddmin over chunks: classic delta debugging over the set of predecessors.
+ * Adaptation: the elements cannot be reordered — chunks are taken contiguously in the
+ * recorded order, complements preserve the order (verified by a test).
  *
- * 1. n = 2; разбить prefix на n подряд идущих чанков.
- * 2. Зонд «prefix минус чанк»: FAILS → prefix := prefix минус чанк, n = max(2, n-1).
- * 3. Полный проход без сужения → n удваивается; когда чанки уже по одному элементу
- *    (n >= размера) и сужения нет — стоп: текущее множество = результат (плато).
- * 4. Одиночный элемент: зонд FAILS → single polluter. PASSES/WEAK — плато
- *    (множество минимально по построению; честность обеспечивает confirmation).
- * 5. Политика §4.3: InfraError на зонде → один повтор того же зонда; повторный
- *    InfraError → INFRA_BROKEN. INFRA никогда не сужает множество.
+ * 1. n = 2; split the prefix into n contiguous chunks.
+ * 2. Probe "prefix minus chunk": FAILS → prefix := prefix minus chunk, n = max(2, n-1).
+ * 3. A full pass without narrowing → n is doubled; when the chunks are already single elements
+ *    (n >= the size) and there is no narrowing — stop: the current set is the result (plateau).
+ * 4. A single element: probe FAILS → single polluter. PASSES/WEAK — plateau
+ *    (the set is minimal by construction; confirmation provides the honesty).
+ * 5. Policy §4.3: InfraError on a probe → one retry of the same probe; a second
+ *    InfraError → INFRA_BROKEN. INFRA never narrows the set.
  */
 fun ddmin(
     harness: ReplayHarness,
@@ -47,7 +47,7 @@ fun ddmin(
     repeat: Int = 3,
     threshold: Int = 2,
 ): DdminResult {
-    // Шаг 1 уже установил воспроизведение на полном prefix — пустым он прийти не может
+    // Step 1 already established reproduction on the full prefix — it cannot arrive empty
     require(prefix.isNotEmpty()) { "ddmin needs a non-empty prefix (step 1 must reproduce first)" }
 
     var current = prefix
@@ -79,8 +79,8 @@ fun ddmin(
                         removed = true
                         break
                     }
-                    // PASSES: чанк виноват — оставляем. WEAK: слабый сигнал консервативно
-                    // НЕ сужает (спека §4.3) — явная ветка, не приравнивается ни к PASSES, ни к FAILS.
+                    // PASSES: the chunk is the culprit — keep it. WEAK: a weak signal conservatively
+                    // does NOT narrow (spec §4.3) — an explicit branch, equated to neither PASSES nor FAILS.
                     ProbeOutcome.PASSES, ProbeOutcome.WEAK -> {}
                     ProbeOutcome.INFRA -> error("unreachable: retry wrapper resolves INFRA")
                 }
@@ -88,16 +88,16 @@ fun ddmin(
         }
         if (removed) continue
 
-        // Полный проход без сужения: плато при чанках по одному элементу, иначе удвоение
+        // A full pass without narrowing: plateau at single-element chunks, otherwise double n
         if (n >= current.size) return DdminResult.Minimized(current, lastFailure)
         n = minOf(2 * n, current.size)
     }
 }
 
 /**
- * Зонд с политикой §4.3: первый InfraError — один повтор ТОГО ЖЕ зонда;
- * повторный InfraError → Broken (INFRA_BROKEN у вызывающего). Успешный ретрай
- * (FAILS/PASSES/WEAK) продолжает ddmin как ни в чём не бывало.
+ * A probe with the §4.3 policy: the first InfraError — one retry of the SAME probe;
+ * a second InfraError → Broken (INFRA_BROKEN at the caller). A successful retry
+ * (FAILS/PASSES/WEAK) continues ddmin as if nothing had happened.
  */
 private fun probeWithInfraRetry(
     harness: ReplayHarness,
@@ -120,9 +120,9 @@ private fun probeWithInfraRetry(
 }
 
 /**
- * Подряд идущие чанки в записанном порядке: count = min(n, size) отрезков,
- * остаток распределяется по первым чанкам (base+1). Чанки покрывают весь список,
- * каждый непуст — сужение строго уменьшает множество.
+ * Contiguous chunks in the recorded order: count = min(n, size) segments,
+ * the remainder is distributed over the first chunks (base+1). The chunks cover the
+ * whole list and each is non-empty — narrowing strictly shrinks the set.
  */
 internal fun splitChunks(size: Int, n: Int): List<IntRange> {
     val count = n.coerceAtMost(size)

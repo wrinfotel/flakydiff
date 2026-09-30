@@ -12,10 +12,10 @@ import org.junit.platform.launcher.core.LauncherFactory
 import java.nio.file.Path
 
 /**
- * Каждый вызов harness = новый процесс (свежая JVM): prefix → victim×N,
- * состояние между зондами не переносится (спека §4.2, блокирующее правило).
- * Integration: порождает реальные JVM-зонды (правило Task 4.1 плана);
- * чистая сборка команды — в JvmReplayHarnessCommandTest (unit-скорость).
+ * Each harness call = a new process (fresh JVM): prefix → victim×N,
+ * state is not carried over between probes (spec §4.2, blocking rule).
+ * Integration: spawns real JVM probes (rule Task 4.1 of the plan);
+ * pure command assembly lives in JvmReplayHarnessCommandTest (unit speed).
  */
 @Tag("integration")
 class JvmReplayHarnessTest {
@@ -26,7 +26,7 @@ class JvmReplayHarnessTest {
     private val testClassesDir = Path.of(entryOf(JvmReplayHarnessTest::class.java))
     private val classesDir = Path.of(entryOf(io.github.wrinfotel.flakydiff.reader.TestRun::class.java))
 
-    /** Сторонние jars — как replay-jar в реальном использовании, последними в cp. */
+    /** Third-party jars — like the replay-jar in real usage, last on the cp. */
     private fun probeClasspath(): List<Path> = listOf(
         LauncherFactory::class.java,      // junit-platform-launcher
         JupiterTestEngine::class.java,    // junit-jupiter-engine

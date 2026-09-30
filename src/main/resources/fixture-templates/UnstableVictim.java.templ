@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Нестабильная жертва (план Task 3.2): счётчик живёт одну JVM зонда — 2-й запуск
- * жертвы падает, 1-й и 3-й проходят. Каждый зонд (свежая JVM) даёт 1/3 → WEAK.
+ * Unstable victim (plan Task 3.2): the counter lives for one probe JVM — the 2nd
+ * victim run fails, the 1st and 3rd pass. Every probe (a fresh JVM) yields 1/3 → WEAK.
  */
 public class {{NAME}} {
 

@@ -8,9 +8,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * ddmin по чанкам (план Task 3.4, спека §4.3): классический delta debugging
- * по множеству предшественников, элементы НЕ переупорядочиваются — чанки
- * берутся подряд в записанном порядке.
+ * ddmin over chunks (plan Task 3.4, spec §4.3): classic delta debugging
+ * over the set of predecessors, elements are NOT reordered — chunks
+ * are taken consecutively in the recorded order.
  */
 class DdminTest {
 
@@ -21,7 +21,7 @@ class DdminTest {
 
     private fun polluterAt(index: Int): TestRef = TestRef("com.example.PolluterTest", "p$index")
 
-    /** Каждый прозваниваемый prefix — подпоследовательность исходного в записанном порядке. */
+    /** Every probed prefix is a subsequence of the original in the recorded order. */
     private fun isSubsequence(sub: List<TestRef>, of: List<TestRef>): Boolean {
         var i = 0
         for (x in of) {
@@ -43,7 +43,7 @@ class DdminTest {
         val result = ddmin(h, prefix, victim)
 
         assertEquals(DdminResult.Minimized(listOf(polluter), failure), result)
-        // порядок элементов не менялся: каждый зонд — подпоследовательность записанного prefix
+        // element order was never changed: every probe is a subsequence of the recorded prefix
         assertTrue(h.calls.all { isSubsequence(it.prefix, prefix) }, "order was reordered")
     }
 
@@ -73,7 +73,7 @@ class DdminTest {
         val result = ddmin(h, ballast(8), victim)
 
         assertEquals(DdminResult.InfraBroken("env dead"), result)
-        // политика §4.3: сужения НЕТ — первый зонд + один повтор, стоп
+        // §4.3 policy: no narrowing — the first probe plus one retry, then stop
         assertEquals(2, h.calls.size)
         assertEquals(h.calls[0].prefix, h.calls[1].prefix)
     }
@@ -99,14 +99,14 @@ class DdminTest {
         val result = ddmin(h, prefix, victim)
 
         assertEquals(DdminResult.Minimized(listOf(polluter), failure), result)
-        // второй вызов — повтор ТОГО ЖЕ зонда (тот же prefix)
+        // the second call retries the SAME probe (same prefix)
         assertEquals(h.calls[0].prefix, h.calls[1].prefix)
     }
 
     @Test
     fun `d weak on every probe never narrows - prefix stays intact`() {
         val prefix = ballast(6)
-        // 1/3 упало = WEAK: отдельный исход предиката, не приравнивается ни к PASSES, ни к FAILS
+        // 1/3 failed = WEAK: a separate predicate outcome, not equated to either PASSES or FAILS
         val h = FakeHarness { _, _, _ -> ReplayResult.NotReproduced(2, 3) }
 
         val result = ddmin(h, prefix, victim)

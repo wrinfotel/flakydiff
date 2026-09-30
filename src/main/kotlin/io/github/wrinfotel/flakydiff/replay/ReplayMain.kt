@@ -22,13 +22,13 @@ import java.util.concurrent.TimeoutException
 import kotlin.system.exitProcess
 
 /**
- * Зонд (спека §4.2): запускает prefix → жертва×repeat в ОДНОЙ JVM. Свежая JVM
- * на весь зонд гарантируется харнессом (Task 2.5), состояние между повторами
- * жертвы не сбрасывается. Результат — JSON в --report, не в stdout.
+ * A probe (spec §4.2): runs prefix → victim×repeat in a SINGLE JVM. A fresh JVM
+ * for the whole probe is guaranteed by the harness (Task 2.5); state between
+ * victim repeats is not reset. The result is JSON in --report, not stdout.
  *
- * Сериализация JSON ручная: в replay-jar (Task 2.3) не пакуются ни
- * kotlinx-serialization, ни picocli — поэтому и парсинг аргументов, и JSON
- * здесь без зависимостей.
+ * JSON serialization is manual: neither kotlinx-serialization nor picocli is
+ * packed into the replay-jar (Task 2.3), so both argument parsing and JSON
+ * here are dependency-free.
  */
 object ReplayMain {
 
@@ -49,19 +49,19 @@ object ReplayMain {
 
         try {
             if (opts.prefix.isNotEmpty()) {
-                // Порядок prefix — семантика проверки (спека §4.2): каждый класс
-                // записанного порядка исполняется СВОИМ discovery-запросом, подряд
-                // идущие ссылки одного класса сворачиваются в один запрос. Один
-                // общий запрос отдавал бы порядок на откуп движку: ClassOrderer
-                // проекта (Random/ClassName) переставил бы классы относительно
-                // записанного прогона.
+                // Prefix order is the check semantics (spec §4.2): each class of the
+                // recorded order is executed with its OWN discovery request, and
+                // consecutive references to one class are collapsed into a single
+                // request. A single shared request would leave the order to the
+                // engine's discretion: the project's ClassOrderer (Random/ClassName)
+                // would rearrange classes relative to the recorded run.
                 //
-                // Отбор по классу + postDiscoveryFilter префиксом имени (план
-                // Task 4.3): display-name ссылка параметризованного теста
-                // (check(int)[2]) адресуется классом + фильтром листьев по префиксу
-                // имени — типы параметров из display-name не парсим, движок прогоняет
-                // все invocations. Голый selectMethod по имени не подходит: он ищет
-                // no-arg метод и не находит параметризованный.
+                // Selection by class + postDiscoveryFilter on the name prefix (plan
+                // Task 4.3): a display-name reference of a parameterized test
+                // (check(int)[2]) is addressed by class + a leaf filter on the name
+                // prefix — we don't parse parameter types out of the display name, the
+                // engine runs all invocations. A bare selectMethod by name doesn't fit:
+                // it looks for a no-arg method and misses a parameterized one.
                 for ((cls, refs) in groupConsecutiveByClass(opts.prefix)) {
                     val groupRequest = LauncherDiscoveryRequestBuilder.request()
                         .selectors(DiscoverySelectors.selectClass(cls))
@@ -78,11 +78,11 @@ object ReplayMain {
                     launcher.execute(groupRequest, listener)
                 }
 
-                // Честность (план Task 4.3): каждая prefix-ссылка обязана быть
-                // адресованной — строкой отчёта (метод) или исполненным контейнером
-                // (целый класс). Неадресованная ссылка делает зонд невалидным:
-                // честная строка flakydiff.prefix-unresolved (stage=ENGINE →
-                // InfraError у харнесса), не молчаливый пропуск.
+                // Honesty (plan Task 4.3): every prefix reference must be addressed —
+                // by a report row (a method) or an executed container (a whole class).
+                // An unaddressed reference makes the probe invalid: an honest
+                // flakydiff.prefix-unresolved row (stage=ENGINE → InfraError on the
+                // harness side), not a silent skip.
                 val prefixRows = entries.toList()
                 for (ref in opts.prefix) {
                     val addressed = if (ref.method == null) {
@@ -105,18 +105,18 @@ object ReplayMain {
             }
             val victimSelector = DiscoverySelectors.selectMethod(opts.victim.cls, opts.victim.method)
             val victimRequest = request(listOf(victimSelector))
-            // Повторы жертвы — отдельные discovery-запросы в ТОЙ ЖЕ JVM: платформа
-            // дедуплицирует одинаковые селекторы внутри одного запроса, а состояние
-            // между execute() не сбрасывается — семантика загрязнения сохраняется.
-            // На каждый повтор — свой kill-watchdog (--victim-timeout).
+            // Victim repeats are separate discovery requests in the SAME JVM: the
+            // platform deduplicates identical selectors within one request, and state
+            // is not reset between execute() calls — pollution semantics are preserved.
+            // Each repeat gets its own kill watchdog (--victim-timeout).
             for (attempt in 1..opts.repeat) {
                 val completed = executeWithTimeout(launcher, victimRequest, listener, opts.victimTimeoutSec)
                 if (!completed) {
-                    // Зависший повтор обрывает остальные: timeout -> InfraError,
-                    // повторять зависание бессмысленно.
+                    // A hung repeat aborts the remaining ones: timeout -> InfraError,
+                    // repeating the hang is pointless.
                     entries.add(
                         Entry(
-                            // victim.method не-null гарантирован parseArgs (--victim обязан быть FQCN#method)
+                            // victim.method non-null is guaranteed by parseArgs (--victim must be FQCN#method)
                             opts.victim.cls, opts.victim.method!!, "FAILED",
                             "flakydiff.victim-timeout",
                             "victim repeat $attempt exceeded ${opts.victimTimeoutSec}s",
@@ -127,8 +127,8 @@ object ReplayMain {
                 }
             }
         } catch (t: Throwable) {
-            // Ошибка на уровне движка/Launcher — честно попадает в отчёт (stage=ENGINE),
-            // а не молча в exit-код.
+            // An engine/Launcher-level error lands honestly in the report (stage=ENGINE),
+            // not silently in the exit code.
             entries.add(Entry("", "", "FAILED", t.javaClass.name, t.message, "ENGINE"))
         }
 
@@ -140,9 +140,9 @@ object ReplayMain {
         LauncherDiscoveryRequestBuilder.request().selectors(selectors).build()
 
     /**
-     * Подряд идущие ссылки одного класса — одна группа (один discovery-запрос);
-     * порядок групп = записанный порядок классов. Порядок методов внутри класса —
-     * порядок движка, как и в записанном Jupiter-прогоне.
+     * Consecutive references to one class form one group (one discovery request);
+     * the group order = the recorded class order. Method order within a class is
+     * the engine's order, as in the recorded Jupiter run.
      */
     private fun groupConsecutiveByClass(prefix: List<PrefixRef>): List<Pair<String, List<PrefixRef>>> {
         val groups = mutableListOf<Pair<String, MutableList<PrefixRef>>>()
@@ -158,9 +158,9 @@ object ReplayMain {
     }
 
     /**
-     * display-name invocation (содержит '(' или '[') адресуется по базовому
-     * имени метода; обычное имя метода не содержит этих символов — идентификаторы
-     * Java/Kotlin (кроме backtick-имен) их не допускают.
+     * A display-name invocation (contains '(' or '[') is addressed by the base
+     * method name; a plain method name contains none of these characters — Java/Kotlin
+     * identifiers (except backtick names) do not allow them.
      */
     private fun isDisplayName(method: String): Boolean = method.contains('(') || method.contains('[')
 
@@ -168,10 +168,10 @@ object ReplayMain {
         if (isDisplayName(method)) method.substringBefore('(').substringBefore('[').trim() else method
 
     /**
-     * Фильтр листьев для «отбора по классу + префикс имени»: ссылка на весь
-     * класс пропускает любой его метод; обычное имя — точное совпадение;
-     * display-name — имя метода или display-name листа с префиксом «base(»
-     * (invocations параметризованного теста).
+     * Leaf filter for "selection by class + name prefix": a whole-class reference
+     * admits any of its methods; a plain name requires an exact match; a display-name
+     * matches the method name or a leaf display-name with the "base(" prefix
+     * (invocations of a parameterized test).
      */
     private fun leafMatches(ref: PrefixRef, descriptor: TestDescriptor): Boolean {
         val source = descriptor.source.orElse(null)
@@ -183,9 +183,9 @@ object ReplayMain {
     }
 
     /**
-     * Повтор жертвы выполняется в рабочем потоке; по истечении рамки поток
-     * прерывается. Листенер герметизируется ДО interrupt, чтобы прерванная
-     * Jupiter-фаза не дописала в отчёт лишнюю запись.
+     * A victim repeat runs on a worker thread; when the budget expires the thread
+     * is interrupted. The listener is sealed BEFORE the interrupt so that the
+     * interrupted Jupiter phase does not append an extra entry to the report.
      */
     private fun executeWithTimeout(
         launcher: Launcher,
@@ -253,8 +253,8 @@ object ReplayMain {
             else -> raw.toIntOrNull()
         }
         if (repeat == null || repeat < 3) {
-            // N=1 — бакеты WEAK/FAILS не определены; N=2 — «≥2 из 2» = детерминизм,
-            // не флейк-режим. Спека: N>=3 обязателен.
+            // N=1 — the WEAK/FAILS buckets are undefined; N=2 — "≥2 of 2" means
+            // determinism, not flaky mode. Spec: N>=3 is required.
             err("flakydiff replay: --repeat must be an integer >= 3 (got '${values["repeat"]}')")
             return null
         }
@@ -307,10 +307,10 @@ object ReplayMain {
         @Volatile
         private var sealed = false
 
-        /** Контейнеры-классы, начавшие исполнение, — для честности prefix-ссылок на весь класс. */
+        /** Class containers that started execution — for the honesty of whole-class prefix references. */
         val executedClasses = mutableSetOf<String>()
 
-        /** Больше не принимает события — вызывается при victim-timeout до interrupt. */
+        /** No longer accepts events — called on victim-timeout before the interrupt. */
         fun seal() {
             sealed = true
         }
@@ -325,9 +325,9 @@ object ReplayMain {
             if (sealed) return
             if (!identifier.parentId.isPresent) return
             if (identifier.isContainer) {
-                // Успешные контейнеры (классы, движок) в отчёт не попадают; падение
-                // контейнера = ошибка на уровне класса/движка: @BeforeAll → BEFORE_ALL,
-                // движок/Launcher → ENGINE.
+                // Successful containers (classes, engine) do not reach the report; a
+                // container failure = a class/engine-level error: @BeforeAll → BEFORE_ALL,
+                // engine/Launcher → ENGINE.
                 if (result.status != TestExecutionResult.Status.FAILED) return
                 val t = result.throwable.orElse(null)
                 when (val source = identifier.source.orElse(null)) {
@@ -369,10 +369,11 @@ object ReplayMain {
         }
 
         /**
-         * BeforeEach не даёт отдельного события в Platform API: если исключение
-         * прошло через @BeforeEach-метод класса (или суперкласса) — это стадия
-         * подготовки, не тело теста. Аннотация резолвится по имени: replay-jar
-         * не тянет junit-jupiter-api (Launcher и API берутся из classpath проекта).
+         * BeforeEach gets no dedicated event in the Platform API: if an exception
+         * came through a class's (or superclass's) @BeforeEach method — that is a
+         * preparation stage, not the test body. The annotation is resolved by name:
+         * the replay-jar does not pull in junit-jupiter-api (the Launcher and the API
+         * come from the project's classpath).
          */
         private fun isBeforeEachFailure(testClass: String, t: Throwable): Boolean {
             val annotation = runCatching { Class.forName("org.junit.jupiter.api.BeforeEach") }.getOrNull()

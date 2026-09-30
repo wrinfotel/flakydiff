@@ -26,11 +26,11 @@ import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
 /**
- * Обязательная e2e-матрица спеки §5 (план Task 4.2) — 11 кейсов, НЕ сокращать.
+ * Mandatory e2e matrix of spec §5 (plan Task 4.2) — 11 cases, do NOT skip any.
  *
- * Кейсы 3, 4, 7, 8, 11 — unit-скорость: XML-ресурсы + fake-harness (план прямо
- * разрешает). Кейсы 1, 2, 5, 6, 9, 10 — реальные зонды: генерируется fixture,
- * в нём прогоняется `mvn test` (записанный порядок), затем полный пайплайн
+ * Cases 3, 4, 7, 8, 11 — unit speed: XML resources + fake harness (the plan
+ * explicitly allows it). Cases 1, 2, 5, 6, 9, 10 — real probes: a fixture is
+ * generated, `mvn test` is run in it (the recorded order), then the full pipeline
  * reader → JvmReplayHarness → diagnose.
  */
 @Tag("integration")
@@ -51,9 +51,9 @@ class DiagnoseE2eTest {
         return proc.exitValue()
     }
 
-    /** Сторонние jars — как replay-jar в реальном использовании, последними в cp. */
+    /** Third-party jars — same as the replay jar in real usage, last on the cp. */
     private fun probeClasspath(): List<Path> = listOf(
-        TestRef::class.java, // main-классы flakydiff (рядом и ReplayMain)
+        TestRef::class.java, // flakydiff main classes (ReplayMain is right there too)
         org.junit.platform.launcher.core.LauncherFactory::class.java,
         org.junit.jupiter.engine.JupiterTestEngine::class.java,
         org.junit.jupiter.api.Test::class.java,
@@ -97,11 +97,11 @@ class DiagnoseE2eTest {
     private fun ballast(classes: Int, testsPerClass: Int = 6): List<Scenario> =
         (1..classes).map { Scenario.SimplePassing("Ballast%02d".format(it), testsPerClass) }
 
-    /** Case 6 проверяется по имени класса диагноза: UNSUPPORTED появится в Task 4.3. */
+    /** Case 6 is checked by the diagnosis class name: UNSUPPORTED arrives in Task 4.3. */
     private val Diagnosis.isUnsupported: Boolean
         get() = this::class.simpleName == "Unsupported"
 
-    // ---------- реальные зонды ----------
+    // ---------- real probes ----------
 
     @Test
     fun `case01 - single polluter is found as ORDER-DEPENDENCY`() {
@@ -176,8 +176,8 @@ class DiagnoseE2eTest {
         )
         assertEquals(0, runMvnIn(fixture.dir, "-q", "test"), "fixture без polluter обязан быть зелёным")
 
-        // Recorded XML заявляет падение жертвы после балласта (race/время recorded-прогона);
-        // реальные зонды по fixture-проекту это падение не воспроизводят.
+        // The recorded XML claims a victim failure after the ballast (a race/timing
+        // artifact of the recorded run); real probes on the fixture project do not reproduce it.
         val reports = tmp.resolve("reports-case05")
         Files.createDirectories(reports)
         val t = System.currentTimeMillis() - 60_000
@@ -241,9 +241,9 @@ class DiagnoseE2eTest {
         val fixture = generateFixture(
             tmp.resolve("fixture-case09"),
             listOf(
-                // EnvSetup готовит «среду» (static-инициализатор при загрузке класса):
-                // записанный прогон и шаг 1 проходят; зонд ddmin без EnvSetup обнажает
-                // сломанный @BeforeAll → честный InfraError, сужения нет (§4.3).
+                // EnvSetup prepares the "environment" (a static initializer at class load):
+                // the recorded run and step 1 pass; the ddmin probe without EnvSetup exposes
+                // the broken @BeforeAll → an honest InfraError, no narrowing (§4.3).
                 Scenario.GuardSetup("EnvSetup", "fd.guard.case09"),
                 Scenario.SimplePassing("Ballast", 2),
                 Scenario.BeforeAllBroken("Broken", "fd.guard.case09"),
@@ -273,7 +273,7 @@ class DiagnoseE2eTest {
                 Scenario.UnconfirmedVictim("Victim", "v10"),
             ),
         )
-        runMvnIn(fixture.dir, "-q", "test") // recorded: жертва на 1-м запуске ещё чиста
+        runMvnIn(fixture.dir, "-q", "test") // recorded: the victim is still clean on the first run
 
         val read = readReports(fixture.reportsDir())
         val victim = TestRef(fixture.classes[2].className, "shouldWork")
@@ -292,7 +292,7 @@ class DiagnoseE2eTest {
         assertEquals(5, d.confirmationAttempts)
     }
 
-    // ---------- unit-скорость: XML + fake-harness ----------
+    // ---------- unit speed: XML + fake harness ----------
 
     @Test
     fun `case03 - victim unstable alone 2 of 3 - NOT-ISOLATED with flag`() {
@@ -318,7 +318,7 @@ class DiagnoseE2eTest {
         val prefix = prefixBefore(read.run, victim)
         assertTrue(prefix.isNotEmpty(), "у жертвы обязаны быть предшественники из XML")
 
-        val h = FakeHarness.fromBooleans(listOf(true, false, false), victim) // true = упал; 1/3 упал → 2/3 прошло → WEAK
+        val h = FakeHarness.fromBooleans(listOf(true, false, false), victim) // true = failed; 1/3 failed → 2/3 passed → WEAK
         val d = diagnose(h, victim, prefix)
 
         assertTrue(d is Diagnosis.NotIsolated, "got: $d")
@@ -352,7 +352,7 @@ class DiagnoseE2eTest {
         val victim = TestRef("io.github.wrinfotel.fixture.T02_VictimTest", "shouldWork")
         val prefix = prefixBefore(read.run, victim)
 
-        val h = FakeHarness.fromBooleans(listOf(true, true, true), victim) // 0/3 прошло → FAILS
+        val h = FakeHarness.fromBooleans(listOf(true, true, true), victim) // 0/3 passed → FAILS
         val d = diagnose(h, victim, prefix)
 
         assertTrue(d is Diagnosis.NotIsolated, "got: $d")
@@ -370,7 +370,7 @@ class DiagnoseE2eTest {
         Files.createDirectories(reports)
         val xml = javaClass.getResourceAsStream("/xml/rerun-flaky.xml")!!
             .readBytes().toString(Charsets.UTF_8)
-        // тот же ref в двух файлах (как после rerun-прогонов): dedup обязан оставить первый прогон
+        // the same ref in two files (as after rerun runs): dedup must keep the first run
         Files.writeString(reports.resolve("TEST-com.acme.FlakeTest.xml"), xml)
         Files.writeString(reports.resolve("TEST-com.acme.FlakeTest-rerun.xml"), xml)
 
@@ -390,8 +390,8 @@ class DiagnoseE2eTest {
         val victim = TestRef("io.github.wrinfotel.fixture.T02_VictimTest", "shouldWork")
         val polluter = TestRef("io.github.wrinfotel.fixture.T01_PolluterTest", "pollutes")
         val h = FakeHarness { prefix, _, _ ->
-            if (prefix.isEmpty()) ReplayResult.NotReproduced(3, 3) // шаг 0: изолированно чисто
-            else ReplayResult.NotReproduced(2, 3) // шаг 1: упал 1 из 3 → WEAK
+            if (prefix.isEmpty()) ReplayResult.NotReproduced(3, 3) // step 0: clean in isolation
+            else ReplayResult.NotReproduced(2, 3) // step 1: failed 1 of 3 → WEAK
         }
 
         val d = diagnose(h, victim, listOf(polluter))
@@ -418,7 +418,7 @@ class DiagnoseE2eTest {
             reports,
             "TEST-b.B.xml",
             passingSuite("b.B", listOf("m")),
-            sameMtime, // ровно то же mtime
+            sameMtime, // exactly the same mtime
         )
 
         val read = readReports(reports, ReadOptions(sequential = true))

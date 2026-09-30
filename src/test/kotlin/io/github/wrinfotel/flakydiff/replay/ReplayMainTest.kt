@@ -22,11 +22,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.io.path.readText
 
 /**
- * ReplayMain тестируется через ProcessBuilder: реальная свежая JVM, classpath
- * проекта ПЕРВЫМ (target/test-classes, target/classes), сторонние jars после —
- * правило classpath из шапки плана. Состав classpath собирается по codeSource
- * загруженных классов — надёжно и под surefire (manifest-only booter jar).
- * Integration: каждый тест порождает реальные JVM-зонды (правило Task 4.1 плана).
+ * ReplayMain is tested via ProcessBuilder: a real fresh JVM, the project classpath
+ * FIRST (target/test-classes, target/classes), third-party jars after — the classpath
+ * rule from the plan header. The classpath composition is built from the codeSource
+ * of the loaded classes — reliable even under surefire (manifest-only booter jar).
+ * Integration: every test spawns real JVM probes (the Task 4.1 rule of the plan).
  */
 @Tag("integration")
 class ReplayMainTest {
@@ -45,7 +45,7 @@ class ReplayMainTest {
     private fun childClasspath(): String =
         listOf(
             ReplayMainTest::class.java,   // target/test-classes (FakePassing, FakeFailing, ...)
-            TestRun::class.java,          // target/classes (main-код flakydiff)
+            TestRun::class.java,          // target/classes (flakydiff main code)
             LauncherFactory::class.java,  // junit-platform-launcher
             JupiterTestEngine::class.java,// junit-jupiter-engine
             org.junit.jupiter.params.ParameterizedTest::class.java, // junit-jupiter-params
@@ -94,7 +94,7 @@ class ReplayMainTest {
             }
             put("stage", kotlinx.serialization.json.JsonPrimitive(stage))
         }
-        // failureMessage у части кейсов есть, у части null — сравниваем только набор ключей + поля выше
+        // failureMessage is present for some cases and null for others — compare only the key set + the fields above
         return actual
     }
 
@@ -142,7 +142,7 @@ class ReplayMainTest {
         assertEquals(0, proc.exitValue(), "output:\n$output")
 
         val entries = readEntries(report)
-        assertEquals(4, entries.size, "report:\n${report.readText()}") // 1 prefix + repeat по умолчанию 3
+        assertEquals(4, entries.size, "report:\n${report.readText()}") // 1 prefix + default repeat of 3
         assertEntry(
             entries[0],
             entry(
@@ -198,7 +198,7 @@ class ReplayMainTest {
         assertEquals(0, proc.exitValue(), "output:\n$output")
 
         val entries = readEntries(report)
-        assertEquals(5, entries.size, "report:\n${report.readText()}") // 2 метода класса + 3 повтора жертвы
+        assertEquals(5, entries.size, "report:\n${report.readText()}") // 2 class methods + 3 victim repeats
         val prefixMethods = entries.take(2).map {
             it["method"]?.jsonPrimitive?.content
         }.toSet()
@@ -223,7 +223,7 @@ class ReplayMainTest {
         assertTrue(elapsedMs < 15_000, "watchdog обязан оборвать зависший повтор быстро, elapsed=${elapsedMs}ms")
 
         val entries = readEntries(report)
-        // первый же зависший повтор обрывает остальные (timeout -> infra, повторять бессмысленно)
+        // the first hanging repeat aborts the rest (timeout -> infra, repeating is pointless)
         assertEquals(1, entries.size, "report:\n${report.readText()}")
         assertEquals(
             "flakydiff.victim-timeout",
@@ -301,9 +301,9 @@ class ReplayMainTest {
 
     @Test
     fun `recorded prefix order wins over engine class reordering`() {
-        // ClassOrderer.ClassName сортирует классы алфавитно (Cleaner < Polluter) —
-        // обратный к записанному порядок. Зонд обязан исполнить Polluter, затем
-        // Cleaner: иначе cleaner не снимет загрязнение и жертва упадёт.
+        // ClassOrderer.ClassName sorts classes alphabetically (Cleaner < Polluter) —
+        // the reverse of the recorded order. The probe must execute Polluter, then
+        // Cleaner: otherwise the cleaner will not remove the pollution and the victim fails.
         val report = tmp.resolve("report.json")
         val (proc, output) = runReplay(
             report,

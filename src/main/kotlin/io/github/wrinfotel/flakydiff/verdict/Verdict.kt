@@ -5,8 +5,8 @@ import io.github.wrinfotel.flakydiff.reader.TestRef
 import kotlinx.serialization.Serializable
 
 /**
- * Реестр имён (план Task 5.1): в коде/JSON — подчёркивания, в чек-листе §5 спеки —
- * те же через дефис (NOT_ISOLATED = NOT-ISOLATED): это отображение одного и того же.
+ * Name registry (plan Task 5.1): in code/JSON — underscores, in the spec's §5 checklist —
+ * the same names with hyphens (NOT_ISOLATED = NOT-ISOLATED): the same thing rendered two ways.
  */
 @Serializable
 enum class VerdictType {
@@ -24,21 +24,21 @@ data class DiagnoseVerdict(
     val victim: TestRef?,
     val polluters: List<TestRef>,
     val evidence: String,
-    val reproducedRate: String?,   // "3/3" — rate шага 1 (полный prefix); null, если зонда не было
-    val confirmedRate: String?,    // "5/5" | null, если confirmation не дошёл
+    val reproducedRate: String?,   // "3/3" — the step 1 rate (full prefix); null when no probe ran
+    val confirmedRate: String?,    // "5/5" | null when confirmation was not reached
     val orderUnreliable: Boolean,
     val orderUnreliableReason: String?,
     val forksPossible: Boolean,
     val markedFlakyInRun: Boolean,
     val victimUnstableInIsolation: Boolean,
-    // null, если polluters нет: INFRA_BROKEN, NOT_REPRODUCED, NOT_ISOLATED, UNSUPPORTED
+    // null when there are no polluters: INFRA_BROKEN, NOT_REPRODUCED, NOT_ISOLATED, UNSUPPORTED
     val reproCommand: String?,
-    val diagnostics: String?,      // для UNSUPPORTED/INFRA_BROKEN
+    val diagnostics: String?,      // for UNSUPPORTED/INFRA_BROKEN
 )
 
 /**
- * Факты, которых в [Diagnosis] нет — они этажом выше (reader/CLI). [repeat] —
- * повторов шага 0: Isolated ⟺ все repeat прошли, поэтому «изолированно N/N pass».
+ * Facts not present in [Diagnosis] — they live a level above (reader/CLI). [repeat] —
+ * the number of step 0 repeats: Isolated ⟺ all repeat runs passed, hence the "isolated N/N pass" evidence.
  */
 data class VerdictContext(
     val projectDir: String,
@@ -48,16 +48,16 @@ data class VerdictContext(
     val forksPossible: Boolean = true,
     val markedFlakyInRun: Boolean = false,
     /**
-     * Фактическая рамка повтора жертвы диагностики, когда она выше дефолтного
-     * пола replay (30s): без неё repro-команда убьёт повторы медленной жертвы
-     * (replay без XML не знает длительностей). null — рамка дефолтная, флаг не нужен.
+     * The actual timeout budget of the diagnostic victim repeat, when it exceeds the
+     * default replay floor (30s): without it the repro command would kill the repeats of
+     * a slow victim (replay without XML does not know the durations). null — default budget, no flag needed.
      */
     val reproVictimTimeoutSec: Long? = null,
 )
 
 /**
- * Маппинг результата этапа 3 в вердикт §4.4. Каждый тип Diagnosis отображается
- * однозначно; числа (rates) переносятся дословно — «молча не врём».
+ * Maps the stage 3 result into the §4.4 verdict. Every Diagnosis type maps
+ * unambiguously; the numbers (rates) are carried over verbatim — no silent lies.
  */
 fun buildVerdict(diagnosis: Diagnosis, ctx: VerdictContext): DiagnoseVerdict = when (diagnosis) {
     is Diagnosis.OrderDependency -> DiagnoseVerdict(
@@ -166,7 +166,7 @@ fun buildVerdict(diagnosis: Diagnosis, ctx: VerdictContext): DiagnoseVerdict = w
 
 private fun isolatedEvidence(ctx: VerdictContext): String = "изолированно ${ctx.repeat}/${ctx.repeat} pass"
 
-/** Polluter-записи — FQCN без #method (replay запускает весь класс), жертва — FQCN#method. */
+/** Polluter entries — FQCN without #method (replay runs the whole class), the victim — FQCN#method. */
 private fun reproCommand(
     polluters: List<TestRef>,
     victim: TestRef,
@@ -178,8 +178,8 @@ private fun reproCommand(
         append("flakydiff replay --project ").append(projectDir)
         append(" --prefix ").append(polluters.joinToString(",") { it.testClass })
         append(" --victim ").append(victim.testClass).append('#').append(victim.method)
-        // Рамка диагностики выше дефолта replay — без неё repro нерабочий (Important
-        // ревью v1): replay без XML дефолтит пол 30s и убивает повторы медленной жертвы.
+        // The diagnostic budget is above the replay default — without it the repro is broken (Important
+        // v1 review): replay without XML defaults the floor to 30s and kills the repeats of a slow victim.
         victimTimeoutSec?.let { append(" --victim-timeout ").append(it) }
     }
 }

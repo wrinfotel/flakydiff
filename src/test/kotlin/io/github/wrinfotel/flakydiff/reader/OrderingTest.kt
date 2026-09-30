@@ -33,8 +33,8 @@ $cases
 
     @Test
     fun `exact timestamps order classes, sequential null keeps unreliable, true clears it`() {
-        // имя-алфавитный порядок (Alpha < Beta) противоречит timestamp-порядку:
-        // Beta стартовал раньше (10:00:01 < 10:00:05), порядок берётся из timestamp
+        // alphabetical name order (Alpha < Beta) contradicts the timestamp order:
+        // Beta started earlier (10:00:01 < 10:00:05), the order is taken from the timestamps
         write("a-beta.xml", suiteXml("com.acme.BetaTest", listOf("m1", "m2"), timestamp = "2026-09-27T10:00:01Z"))
         write("z-alpha.xml", suiteXml("com.acme.AlphaTest", listOf("m1", "m2"), timestamp = "2026-09-27T10:00:05Z"))
 
@@ -66,7 +66,7 @@ $cases
     @Test
     fun `no timestamps, mtimes 1s apart, order by mtime heuristic, unreliable even with sequential`() {
         val base = Instant.parse("2026-09-27T10:00:00Z")
-        // start = mtime - time: у Beta mtime раньше на 60с → Beta стартовал раньше
+        // start = mtime - time: Beta's mtime is 60s earlier → Beta started earlier
         write("a-beta.xml", suiteXml("com.acme.BetaTest", listOf("m1")), modifiedAt = base.plusSeconds(60))
         write("z-alpha.xml", suiteXml("com.acme.AlphaTest", listOf("m1")), modifiedAt = base.plusSeconds(120))
 

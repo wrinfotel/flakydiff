@@ -11,9 +11,9 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
 /**
- * Smoke генератора (план Task 4.1): fixture создаётся и `mvn -q test` в нём
- * проходит. Интеграционный — запускает реальный Maven.
- * Polluter стоит ПОСЛЕ жертвы: в записанном прогоне жертва чиста, всё зелёное.
+ * Smoke test of the generator (plan Task 4.1): the fixture is generated and `mvn -q test`
+ * inside it passes. Integration — runs real Maven.
+ * The polluter comes AFTER the victim: in the recorded run the victim is clean, all green.
  */
 @Tag("integration")
 class FixtureProjectSmokeTest {

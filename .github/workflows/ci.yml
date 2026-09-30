@@ -34,7 +34,7 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.jdk }}
-      # интеграционные тесты появятся на этапе 4; профили гарантируют, что
-      # excludedGroups из fast не задавит тег integration в full
+      # integration tests arrive in stage 4; the profiles guarantee that
+      # excludedGroups from fast does not suppress the integration tag in full
       - name: Integration tests (full profile)
         run: mvn -B verify -P full

@@ -2,13 +2,13 @@ package io.github.wrinfotel.flakydiff.verdict
 
 import kotlinx.serialization.json.Json
 
-/** Имя типа для текста/чек-листа §5: подчёркивания → дефисы (ORDER_DEPENDENCY → ORDER-DEPENDENCY). */
+/** Type name for text/the §5 checklist: underscores → hyphens (ORDER_DEPENDENCY → ORDER-DEPENDENCY). */
 fun VerdictType.display(): String = name.replace('_', '-')
 
 /**
- * Строка flags §4.4: order_unreliable и forks_possible — всегда (спека);
- * victim_unstable_in_isolation и marked_flaky_in_run — только когда выставлены.
- * Причина недостоверности порядка — в скобках у order_unreliable=yes.
+ * The flags line of §4.4: order_unreliable and forks_possible — always (spec);
+ * victim_unstable_in_isolation and marked_flaky_in_run — only when set.
+ * The reason the order is unreliable goes in parentheses after order_unreliable=yes.
  */
 private fun flagsLine(v: DiagnoseVerdict): String {
     val orderUnreliable = when {
@@ -25,11 +25,11 @@ private fun flagsLine(v: DiagnoseVerdict): String {
 }
 
 /**
- * Текстовый рендер §4.4: заголовок VERDICT (+ rates, когда есть), строки
- * victim/polluter (по строке на каждого polluter'а), evidence, diagnostics
- * (только если не дублирует evidence), flags, repro. Значения выровнены на
- * 10-ю колонку, как в примерах спеки; строки без значения (repro при null) —
- * не печатаются.
+ * Text rendering of §4.4: the VERDICT header (+ rates when present), the
+ * victim/polluter lines (one per polluter), evidence, diagnostics
+ * (only if it does not duplicate the evidence), flags, repro. Values are aligned to
+ * the 10th column, as in the spec examples; lines with no value (repro when null)
+ * are not printed.
  */
 fun renderText(v: DiagnoseVerdict): String {
     val lines = mutableListOf<String>()
@@ -56,8 +56,8 @@ fun renderText(v: DiagnoseVerdict): String {
 
 private val verdictJson = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
-/** JSON §4.4: те же поля camelCase, тип — подчёркивания (реестр имён Task 5.1). */
+/** The §4.4 JSON: the same camelCase fields, the type with underscores (name registry Task 5.1). */
 fun renderJson(v: DiagnoseVerdict): String = verdictJson.encodeToString(DiagnoseVerdict.serializer(), v)
 
-/** Обратный рендер для `flakydiff report --verdict file.json` (Task 5.3). */
+/** Reverse render for `flakydiff report --verdict file.json` (Task 5.3). */
 fun parseVerdictJson(text: String): DiagnoseVerdict = verdictJson.decodeFromString(DiagnoseVerdict.serializer(), text)
